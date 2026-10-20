@@ -38,6 +38,7 @@ tar xzf preliminary.tar.gz           # 得到 ~/WORK/preliminary/{query/, databa
 
 # 4. 提交完整基线作业（输出 stdout.%j 写在提交目录）
 sbatch SuperMSA/job_baseline.slurm      # 路径可在脚本顶部 REPO/DATA/OUT 三行修改
+# 作业内依次执行 prologue.sh（预处理，计时）→ run_queries.sh（搜索 + 评分），stdout/stderr 都写进 stdout.%j
 squeue -u $USER                      # 查看状态：PD 排队 / R 运行
 ```
 
@@ -48,6 +49,7 @@ squeue -u $USER                      # 查看状态：PD 排队 / R 运行
 ├── config.guess/sub    # configure 依赖的平台识别脚本
 ├── install-sh          # make install 依赖
 ├── smoke_test.sh       # 冒烟测试（见上）
+├── prologue.sh         # 选手预处理入口：在 prepare() 中填写，计时 "prologue time" 计入总成绩
 ├── run_queries.sh      # 批量搜索驱动：遍历 query/ 对 database.fasta 逐条搜索
 ├── job_baseline.slurm  # 探索1000 的 sbatch 作业模板（调用 run_queries.sh）
 ├── score.py            # 自评打分（从数据 header 读 SCOP 标签）
