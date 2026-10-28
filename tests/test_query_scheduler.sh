@@ -56,7 +56,8 @@ run() {
         bash "$tmp/repo/run_queries.sh" "$tmp/data" "$out" > "$tmp/run.log" 2>&1
 }
 
-bash -n "$REPO/run_queries.sh" "$REPO/scripts/query_worker.sh"
+bash -n "$REPO/run_queries.sh"
+bash -n "$REPO/scripts/query_worker.sh"
 run 1 "$tmp/serial"
 run 3 "$tmp/parallel"
 
