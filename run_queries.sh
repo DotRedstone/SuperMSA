@@ -84,7 +84,7 @@ done
 t_all=$(date +%s.%N)
 if [ "$ran" -gt 0 ]; then
     export JACKHMMER CPU ITERS EVALUE FILTERS OUT DB
-    printf '%s\\0' "${to_run[@]}" |
+    printf '%s\0' "${to_run[@]}" |
         xargs -0 -r -P "$PARALLEL" -n 1 bash "$REPO/scripts/query_worker.sh"
 
     for qf in "${to_run[@]}"; do
@@ -92,13 +92,13 @@ if [ "$ran" -gt 0 ]; then
         row="$OUT/.query-timings/$sid.tsv"
         [ -s "$row" ] || die "missing worker timing: $row"
         cat "$row" >> "$TIMING"
-        IFS=$'\\t' read -r _sid secs hits < "$row"
+        IFS=$'\t' read -r _sid secs hits < "$row"
         echo "$sid: ${secs}s, $hits hits"
     done
 fi
 
 wall=$(elapsed "$t_all")
-printf 'seconds\\tqueries_run\\tskipped\\n%s\\t%s\\t%s\\n' "$wall" "$ran" "$skipped" > "$OUT/wall_time.tsv"
+printf 'seconds\tqueries_run\tskipped\n%s\t%s\t%s\n' "$wall" "$ran" "$skipped" > "$OUT/wall_time.tsv"
 echo "正式计时: ${wall} s（运行 $ran 条，跳过 $skipped 条；并发数 $PARALLEL）"
 [ "$skipped" = 0 ] || echo "WARNING: 有 $skipped 条沿用已有结果，计时无效；正式测试请清空输出目录或设 FORCE=1" >&2
 
