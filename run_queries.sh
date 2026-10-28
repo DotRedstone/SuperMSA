@@ -5,7 +5,7 @@
 # 输出:
 #   tbl/<sid>.tbl   命中表（评分输入）     msa/<sid>.sto  多序列比对
 #   timing.tsv      逐条耗时（仅供参考）   wall_time.tsv  正式计时：预热结束 → 最后一条跑完
-# 环境变量: JACKHMMER CPU(8) ITERS(3) EVALUE(0.001) FILTERS WARMUP(5) FORCE(0，设 1 重跑已有结果)
+# 环境变量: JACKHMMER CPU(8) PARALLEL(1) ITERS(3) EVALUE(0.001) FILTERS WARMUP(5) FORCE(0，设 1 重跑已有结果)
 # 预热: 先对第一条 query 跑 WARMUP 次，把数据库读进 page cache，结果丢弃、不计时。
 # 评分: data_dir 下有 baseline_roc10.tsv 时，逐条判定 ROC10 是否不低于基线的 90%。
 set -euo pipefail
@@ -25,6 +25,7 @@ ITERS=${ITERS:-3}
 EVALUE=${EVALUE:-0.001}
 FILTERS=${FILTERS:---noali --F1 0.0005 --F2 5e-05 --F3 5e-07}
 WARMUP=${WARMUP:-5}
+PARALLEL=${PARALLEL:-1}  # concurrent queries (default 1 for baseline compatibility)
 FORCE=${FORCE:-0}
 DB=$DATA/database.fasta
 TIMING=$OUT/timing.tsv
@@ -45,6 +46,7 @@ rm -f "$OUT/.write_test"
 
 ARGS=(--cpu "$CPU" $FILTERS -N "$ITERS" -E "$EVALUE" -o /dev/null)
 total=${#queries[@]}
+[[ "$PARALLEL" =~ ^[1-9][0-9]*$ ]] || die "PARALLEL must be a positive integer"
 
 if [ "$WARMUP" -gt 0 ]; then
     echo "预热 $WARMUP 次（不计时）..."
@@ -53,30 +55,54 @@ if [ "$WARMUP" -gt 0 ]; then
     done
 fi
 
-i=0; ran=0; skipped=0
-t_all=$(date +%s.%N)
+
+# Resolve skipped queries before launching workers. Each worker writes its own
+# temporary table/alignment and timing file; only the parent writes timing.tsv.
+i=0; skipped=0
+to_run=()
 for qf in "${queries[@]}"; do
     sid=$(basename "$qf" .fasta)
     i=$((i + 1))
     if [ "$FORCE" = 0 ] && [ -s "$OUT/tbl/$sid.tbl" ]; then
         echo "[$i/$total] $sid: exists, skip"
         skipped=$((skipped + 1))
-        continue
+    else
+        to_run+=("$qf")
     fi
-    ran=$((ran + 1))
-    t0=$(date +%s.%N)
-    "$JACKHMMER" "${ARGS[@]}" --tblout "$OUT/tbl/$sid.tbl" -A "$OUT/msa/$sid.sto" "$qf" "$DB"
-    secs=$(elapsed "$t0")
-    hits=$(grep -vc '^#' "$OUT/tbl/$sid.tbl" || true)
-    echo -e "$sid\t$secs\t$hits" >> "$TIMING"
-    echo "[$i/$total] $sid: ${secs}s, $hits hits"
+done
+ran=${#to_run[@]}
+
+mkdir -p "$OUT/.query-timings"
+for qf in "${to_run[@]}"; do
+    sid=$(basename "$qf" .fasta)
+    rm -f "$OUT/.query-timings/$sid.tsv"
 done
 
+# Keep the original official wall-clock boundary: after warm-up, until all
+# queries have completed. GNU xargs -P refills free slots dynamically and
+# returns non-zero when any child fails (pipefail propagates that failure).
+t_all=$(date +%s.%N)
+if [ "$ran" -gt 0 ]; then
+    export JACKHMMER CPU ITERS EVALUE FILTERS OUT DB
+    printf '%s\\0' "${to_run[@]}" |
+        xargs -0 -r -P "$PARALLEL" -n 1 bash "$REPO/scripts/query_worker.sh"
+
+    for qf in "${to_run[@]}"; do
+        sid=$(basename "$qf" .fasta)
+        row="$OUT/.query-timings/$sid.tsv"
+        [ -s "$row" ] || die "missing worker timing: $row"
+        cat "$row" >> "$TIMING"
+        IFS=$'\\t' read -r _sid secs hits < "$row"
+        echo "$sid: ${secs}s, $hits hits"
+    done
+fi
+
 wall=$(elapsed "$t_all")
-echo -e "seconds\tqueries_run\tskipped\n$wall\t$ran\t$skipped" > "$OUT/wall_time.tsv"
-echo "正式计时: ${wall} s（运行 $ran 条，跳过 $skipped 条）"
+printf 'seconds\\tqueries_run\\tskipped\\n%s\\t%s\\t%s\\n' "$wall" "$ran" "$skipped" > "$OUT/wall_time.tsv"
+echo "正式计时: ${wall} s（运行 $ran 条，跳过 $skipped 条；并发数 $PARALLEL）"
 [ "$skipped" = 0 ] || echo "WARNING: 有 $skipped 条沿用已有结果，计时无效；正式测试请清空输出目录或设 FORCE=1" >&2
 
 BASELINE=$DATA/baseline_roc10.tsv
-[ -f "$BASELINE" ] || BASELINE=
-python3 "$REPO/score.py" --data "$DATA" --results "$OUT" ${BASELINE:+--baseline "$BASELINE"} || echo "warning: scoring step failed" >&2
+score_args=(--data "$DATA" --results "$OUT")
+[ ! -f "$BASELINE" ] || score_args+=(--baseline "$BASELINE")
+python3 "$REPO/score.py" "${score_args[@]}"
