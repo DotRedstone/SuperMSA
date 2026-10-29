@@ -171,6 +171,7 @@ esl_sqascii_Open(char *filename, int format, ESL_SQFILE *sqfp)
   ascii->bookmark_linenum = 0;
 
   ascii->is_linebased = FALSE;
+  ascii->fasta_read_chunk = eslREADBUFSIZE;
   ascii->eof_is_ok    = FALSE;
   ascii->parse_header = NULL;
   ascii->skip_header  = NULL;
@@ -265,6 +266,12 @@ esl_sqascii_Open(char *filename, int format, ESL_SQFILE *sqfp)
     }
   if (format == eslSQFILE_UNKNOWN) { status = eslEFORMAT; goto ERROR; }
 
+  /* E07: larger fread chunks only for ordinary seekable FASTA streams.
+   * Leave gzip, stdin, unrelated parsers and default behavior untouched. */
+  if (format == eslSQFILE_FASTA && !ascii->do_gzip && !ascii->do_stdin) {
+    const char *v = getenv("MSA_FASTA_CHUNK_64K");
+    if (v && strcmp(v, "1") == 0) ascii->fasta_read_chunk = 64 * 1024;
+  }
 
   /* Configure the <sqfp>'s parser and inmaps for this format. */
   if (!esl_sqio_IsAlignment(format)) 
@@ -2063,6 +2070,7 @@ loadmem(ESL_SQFILE *sqfp)
   int   status;
 
   ESL_SQASCII_DATA *ascii = &sqfp->data.ascii;
+  const int chunk = ascii->fasta_read_chunk;
 
   if (ascii->do_buffer)
   {
@@ -2072,21 +2080,25 @@ loadmem(ESL_SQFILE *sqfp)
   else if (ascii->is_recording == TRUE)
   {
       if (ascii->mem == NULL) ascii->moff = ftello(ascii->fp);        /* first time init of the offset */
-      ESL_RALLOC(ascii->mem, tmp, sizeof(char) * (ascii->allocm + eslREADBUFSIZE));
-      ascii->allocm += eslREADBUFSIZE;
-      n = fread(ascii->mem + ascii->mpos, sizeof(char), eslREADBUFSIZE, ascii->fp);
+      ESL_RALLOC(ascii->mem, tmp, sizeof(char) * (ascii->allocm + chunk));
+      ascii->allocm += chunk;
+      n = fread(ascii->mem + ascii->mpos, sizeof(char), chunk, ascii->fp);
       ascii->mn += n;
   }
   else
   {
       if (ascii->mem == NULL) {
-        ESL_ALLOC(ascii->mem, sizeof(char) * eslREADBUFSIZE);
-        ascii->allocm = eslREADBUFSIZE;
+        ESL_ALLOC(ascii->mem, sizeof(char) * chunk);
+        ascii->allocm = chunk;
+      } else if (ascii->allocm < chunk) {
+        /* Format autodetection may have allocated a smaller 4K buffer. */
+        ESL_RALLOC(ascii->mem, tmp, sizeof(char) * chunk);
+        ascii->allocm = chunk;
       }
       ascii->is_recording = -1;/* no more recording is possible now */
       ascii->mpos = 0;
       ascii->moff = ftello(ascii->fp);
-      n = fread(ascii->mem, sizeof(char), eslREADBUFSIZE, ascii->fp); /* see note [1] below */
+      n = fread(ascii->mem, sizeof(char), chunk, ascii->fp); /* see note [1] below */
       ascii->mn   = n;
   }
   return (n == 0 ? eslEOF : eslOK);
