@@ -14,6 +14,7 @@ test -s source/huffman.binaries.sha256 || {
   echo "ERROR: missing smoke-stage compiled binaries marker" >&2
   exit 2
 }
+(cd source && sha256sum -c huffman.binaries.sha256)
 echo "PERF_START feature=t2 job=$SLURM_JOB_ID host=$(hostname) time=$(date -Is)"
 bash source/scripts/run_feature_abba.sh
 echo "PERF_FINISH feature=t2 time=$(date -Is)"
