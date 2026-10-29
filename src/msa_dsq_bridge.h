@@ -29,9 +29,7 @@ static MSA_DSQ_READER msa_dsq_reader = {0};
 static int
 msa_dsq_open(const char *basename, ESL_ALPHABET *abc)
 {
-  ESL_ALPHABET *expected = abc;
   size_t len;
-  int status;
   char *endptr = NULL;
   const char *budget = getenv("MSA_DSQ_UNPACKERS");
   long workers = 1; /* one loader plus one unpacker, by default */
@@ -47,14 +45,10 @@ msa_dsq_open(const char *basename, ESL_ALPHABET *abc)
   msa_dsq_reader.basename = malloc(len+1);
   if (!msa_dsq_reader.basename) return eslEMEM;
   memcpy(msa_dsq_reader.basename, basename, len+1);
-  status = esl_dsqdata_OpenWithUnpackers(
-      &expected, msa_dsq_reader.basename, 1, msa_dsq_reader.n_unpackers,
-      &msa_dsq_reader.dd);
-  if (status != eslOK) {
-    free(msa_dsq_reader.basename);
-    msa_dsq_reader.basename = NULL;
-    return status;
-  }
+  /* Do not start the loader/unpackers until the first actual database
+   * read. Otherwise zero-length or skipped queries could leave a
+   * prefetching reader that cannot be cleanly closed without draining. */
+  msa_dsq_reader.dd = NULL;
   msa_dsq_reader.chunk = NULL;
   msa_dsq_reader.offset = 0;
   msa_dsq_reader.next_index = 0;
