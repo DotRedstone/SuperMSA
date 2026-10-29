@@ -150,7 +150,7 @@ msa_bin8_read(ESL_SQ *sq)
   sq->C = 0;
   sq->W = (int64_t)len;
   sq->tax_id = (int32_t)taxid;
-  sq->idx = (int64_t)msa_bin8_reader.next_index;
+  sq->idx = -1; /* Match Easel's ordinary sequential FASTA reader. */
   msa_bin8_reader.next_index++;
   msa_bin8_reader.pos += 20 + (size_t)nlen + alen + dlen + len;
   return eslOK;
@@ -167,7 +167,7 @@ msa_bin8_readblock(ESL_SQ_BLOCK *block)
   block->count = 0;
   block->complete = TRUE;
   block->first_seqidx = (int64_t)msa_bin8_reader.next_index;
-  for (i = 0; i < block->listSize && residues < 1000000; i++) {
+  for (i = 0; i < block->listSize && residues < MAX_RESIDUE_COUNT; i++) {
     status = msa_bin8_read(&block->list[i]);
     if (status == eslEOF) break;
     if (status != eslOK) return status;
