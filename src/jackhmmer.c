@@ -25,6 +25,8 @@
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
+#include <errno.h>
+#include <limits.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
 #endif 
@@ -173,6 +175,21 @@ static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
+/* All knobs are opt-in; defaults preserve upstream queue and block sizes. */
+static int msa_block_seqs=BLOCK_SIZE;
+static int msa_queue_factor=2;
+static int msa_tune_env(const char *name,int fallback,int min,int max)
+{
+  const char *str=getenv(name);
+  char *end;
+  long value;
+  if (!str || !*str) return fallback;
+  errno=0;
+  value=strtol(str,&end,10);
+  if (errno || *end || value<min || value>max)
+    p7_Fail("Invalid %s: expected integer %d..%d",name,min,max);
+  return (int)value;
+}
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
@@ -546,10 +563,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #ifdef HMMER_THREADS
   /* initialize thread data */
   ncpus = ESL_MIN(esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
+  msa_block_seqs=msa_tune_env("MSA_BLOCK_SEQS",BLOCK_SIZE,128,4096);
+  msa_queue_factor=msa_tune_env("MSA_QUEUE_FACTOR",2,2,8);
   if (ncpus > 0)
     {
+      if (ncpus > INT_MAX / msa_queue_factor) p7_Fail("Queue capacity overflow");
       threadObj = esl_threads_Create(&pipeline_thread);
-      queue = esl_workqueue_Create(ncpus * 2);
+      queue = esl_workqueue_Create(ncpus * msa_queue_factor);
+      if (getenv("MSA_QUEUE_CONFIG_LOG"))
+        fprintf(stderr,"MSA_QUEUE_CONFIG workers=%d block_seqs=%d queue_blocks=%d\n",
+                ncpus,msa_block_seqs,ncpus * msa_queue_factor);
     }
 #endif
 
@@ -571,9 +594,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 
 #ifdef HMMER_THREADS
-  for (i = 0; i < ncpus * 2; ++i)
+  for (i = 0; i < ncpus * msa_queue_factor; ++i)
     {
-      block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
+      block = esl_sq_CreateDigitalBlock(msa_block_seqs, abc);
       if (block == NULL) 
 	{
 	  p7_Fail("Failed to allocate sequence block");
