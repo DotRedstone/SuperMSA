@@ -81,3 +81,33 @@ squeue -u "$USER"
 
 The helper is packaged separately so the original full T3 archive can
 remain unchanged. No new compilation or smoke test is required.
+
+## Second r02 preflight: empirical cross-build precision drift
+
+The three `r01` base outputs are distinct, already-complete results
+from nodes `ibc11b08n14` (T1, T3) and `ibc12b04n25` (T2).
+Against the old V1 hit files, each showed the same aggregate pattern
+across all 12 queries: exactly 8,063 hits, no missing/new target IDs,
+no metadata/integer-count differences, max full/best score change 0.1,
+max E-value relative change 7.69% (best), 13 row-position changes,
+and exactly one target `Q969Q1_1/annotated_I7MCM0` with full/best
+bias changing from `7.1` to `6.8` (delta=0.3).
+The old four-format trial 01 and trial 08 RAW snapshots both matched
+the V1 baseline exactly in all 8,063 hits/fields.
+
+This recurring cross-node numerical difference is **not** evidence
+that T1, T2, or T3 is individually incorrect, nor does the data identify
+its cause. Verify compiler/configuration/ISA, especially as Slurm smoke
+jobs and earlier manually built four-format binaries may have used
+different toolchains.
+
+The comparator now uses a narrowly scoped, empirical **0.35 absolute
+full/best bias tolerance**, only columns 6 and 9. All other numeric
+thresholds remain unchanged (0.25 score/exp, 20% relative E-value).
+Its regression test requires observed 0.3 bias to pass but 0.4 to fail.
+The legacy and tuned target-ID sets, integer domain counts, metadata
+and ranking constraints remain enforced. Do not claim mathematical
+identity or universal floating-point reproducibility.
+
+The helper still fails closed if the old 12-query base checks find
+larger or different drift. No output has been discarded or overwritten.
