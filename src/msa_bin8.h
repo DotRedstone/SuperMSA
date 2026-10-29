@@ -24,15 +24,19 @@
 
 #include "easel.h"
 #include "esl_sq.h"
+#include "msa_huffman.h"
 
 typedef struct {
   const unsigned char *data;
   size_t size;
   size_t pos;
+  size_t start;
   uint64_t next_index;
+  int is_huffman;
+  MSA_HUFF_TABLE huffman;
 } MSA_BIN8_READER;
 
-static MSA_BIN8_READER msa_bin8_reader = { NULL, 0, 0, 0 };
+static MSA_BIN8_READER msa_bin8_reader;
 
 static uint32_t
 msa_bin8_u32(const unsigned char *p)
@@ -59,13 +63,25 @@ msa_bin8_open(const char *path)
   ptr = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
   close(fd);
   if (ptr == MAP_FAILED) return eslESYS;
-  if (memcmp(ptr, "MSA8DB01", 8) != 0) {
+  if (memcmp(ptr, "MSA8DB01", 8) == 0) {
+    msa_bin8_reader.start = 8;
+    msa_bin8_reader.is_huffman = 0;
+  } else if ((size_t)st.st_size >= 8 + 256 &&
+             memcmp(ptr, "MSAHUF01", 8) == 0) {
+    if (msa_huff_init(&msa_bin8_reader.huffman,
+                      (const unsigned char *)ptr + 8) != 0) {
+      munmap(ptr, (size_t)st.st_size);
+      return eslEFORMAT;
+    }
+    msa_bin8_reader.start = 8 + 256;
+    msa_bin8_reader.is_huffman = 1;
+  } else {
     munmap(ptr, (size_t)st.st_size);
     return eslEFORMAT;
   }
   msa_bin8_reader.data = (const unsigned char *)ptr;
   msa_bin8_reader.size = (size_t)st.st_size;
-  msa_bin8_reader.pos = 8;
+  msa_bin8_reader.pos = msa_bin8_reader.start;
   msa_bin8_reader.next_index = 0;
   return eslOK;
 }
@@ -74,7 +90,7 @@ static void
 msa_bin8_rewind(void)
 {
   if (msa_bin8_reader.data != NULL) {
-    msa_bin8_reader.pos = 8;
+    msa_bin8_reader.pos = msa_bin8_reader.start;
     msa_bin8_reader.next_index = 0;
   }
 }
@@ -85,8 +101,9 @@ msa_bin8_close(void)
   if (msa_bin8_reader.data != NULL)
     munmap((void *)msa_bin8_reader.data, msa_bin8_reader.size);
   msa_bin8_reader.data = NULL;
-  msa_bin8_reader.size = msa_bin8_reader.pos = 0;
+  msa_bin8_reader.size = msa_bin8_reader.pos = msa_bin8_reader.start = 0;
   msa_bin8_reader.next_index = 0;
+  msa_bin8_reader.is_huffman = 0;
 }
 
 /* Copy a metadata field from the mapped read-only source into a
@@ -111,8 +128,8 @@ static int
 msa_bin8_read(ESL_SQ *sq)
 {
   const unsigned char *p;
-  uint32_t nlen, alen, dlen, len, taxid;
-  size_t remain;
+  uint32_t nlen, alen, dlen, len, taxid, payload;
+  size_t remain, header_bytes, metadata_bytes;
   int status;
 
   if (msa_bin8_reader.data == NULL) return eslEINVAL;
@@ -120,17 +137,21 @@ msa_bin8_read(ESL_SQ *sq)
   if (msa_bin8_reader.pos > msa_bin8_reader.size) return eslEFORMAT;
 
   remain = msa_bin8_reader.size - msa_bin8_reader.pos;
-  if (remain < 20) return eslEFORMAT;
+  header_bytes = msa_bin8_reader.is_huffman ? 24 : 20;
+  if (remain < header_bytes) return eslEFORMAT;
   p = msa_bin8_reader.data + msa_bin8_reader.pos;
   nlen  = msa_bin8_u32(p);
   alen  = msa_bin8_u32(p + 4);
   dlen  = msa_bin8_u32(p + 8);
   len   = msa_bin8_u32(p + 12);
   taxid = msa_bin8_u32(p + 16);
-  p += 20;
-  remain -= 20;
+  payload = msa_bin8_reader.is_huffman ? msa_bin8_u32(p + 20) : len;
+  p += header_bytes;
+  remain -= header_bytes;
+  metadata_bytes = (size_t)nlen + alen + dlen;
   if (nlen == 0 || nlen > INT_MAX - 1 || alen > INT_MAX - 1 ||
-      dlen > INT_MAX - 1 || (uint64_t)nlen + alen + dlen + len > remain)
+      dlen > INT_MAX - 1 || metadata_bytes > remain ||
+      (size_t)payload > remain - metadata_bytes)
     return eslEFORMAT;
   if (sq->dsq == NULL) return eslEINVAL;
   if ((status = msa_bin8_copystr(&sq->name, &sq->nalloc, p, nlen)) != eslOK) return status;
@@ -141,7 +162,12 @@ msa_bin8_read(ESL_SQ *sq)
   p += dlen;
   if ((status = esl_sq_GrowTo(sq, len)) != eslOK) return status;
   sq->dsq[0] = eslDSQ_SENTINEL;
-  memcpy(sq->dsq + 1, p, len);
+  if (msa_bin8_reader.is_huffman) {
+    if (msa_huff_decode(&msa_bin8_reader.huffman, p, payload,
+                        sq->dsq + 1, len) != 0) return eslEFORMAT;
+  } else {
+    memcpy(sq->dsq + 1, p, len);
+  }
   sq->dsq[(size_t)len + 1] = eslDSQ_SENTINEL;
 
   sq->n = sq->L = (int64_t)len;
@@ -152,7 +178,7 @@ msa_bin8_read(ESL_SQ *sq)
   sq->tax_id = (int32_t)taxid;
   sq->idx = -1; /* Match Easel's ordinary sequential FASTA reader. */
   msa_bin8_reader.next_index++;
-  msa_bin8_reader.pos += 20 + (size_t)nlen + alen + dlen + len;
+  msa_bin8_reader.pos += header_bytes + metadata_bytes + payload;
   return eslOK;
 }
 
