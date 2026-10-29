@@ -12,11 +12,11 @@ for id in t1 t2 t3; do
   dst="$ROOT/$id-abba-r01"
   test -s "$src" || { echo "ERROR: missing $src" >&2; exit 2; }
   test ! -e "$dst" || { echo "ERROR: $dst already exists; refusing overwrite" >&2; exit 2; }
-  tar -tf "$src" | grep -qx 'scripts/run_feature_abba.sh' ||
+  tar -tf "$src" | grep -Fx 'scripts/run_feature_abba.sh' >/dev/null ||
     { echo "ERROR: no pilot runner in $src" >&2; exit 2; }
-  tar -tf "$src" | grep -qx 'job_feature_smoke.slurm' ||
+  tar -tf "$src" | grep -Fx 'job_feature_smoke.slurm' >/dev/null ||
     { echo "ERROR: no smoke job in $src" >&2; exit 2; }
-  tar -tf "$src" | grep -qx 'job_feature_perf.slurm' ||
+  tar -tf "$src" | grep -Fx 'job_feature_perf.slurm' >/dev/null ||
     { echo "ERROR: no perf job in $src" >&2; exit 2; }
 done
 for id in t1 t2 t3; do
