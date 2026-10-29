@@ -721,7 +721,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  else if (iteration < maxiterations)
 	    { if (fprintf(ofp, "@@ Continuing to next round.\n\n")           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
-	  esl_sqfile_Position(dbfp, 0);
+	  /* Each jackhmmer iteration must rescan the complete target database.
+	   * Rewind the binary cursor as well as the original FASTA cursor. */
+	  if (msa_bin8_reader.data != NULL) msa_bin8_rewind();
+	  else esl_sqfile_Position(dbfp, 0);
 	} /* end iteration loop */
 
       /* Because we destroy/create the hitlist, om, pipeline, and msa above, rather than create/destroy,
@@ -1316,8 +1319,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_trace_Destroy(qtr);
       esl_sq_Reuse(qsq);
       esl_keyhash_Reuse(kh);
-      if (msa_bin8_reader.data != NULL) msa_bin8_rewind();
-      else esl_sqfile_Position(dbfp, 0);
+      esl_sqfile_Position(dbfp, 0);
     }
   if      (qstatus == eslEFORMAT) mpi_failure("Parse failed (sequence file %s):\n%s\n",
 					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
