@@ -10,7 +10,7 @@
 #SBATCH -o perf.%j.out
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
-test -s source/four_way.binaries.sha256 || {
+test -s source/bin8.binaries.sha256 || {
   echo "ERROR: missing smoke-stage compiled binaries marker" >&2
   exit 2
 }
