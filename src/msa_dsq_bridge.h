@@ -83,28 +83,31 @@ msa_dsq_close(void)
   return status;
 }
 
-/* Called after the complete DB has been read. Restart Easel's asynchronous
- * pipeline for the next JackHMMER iteration or query. */
+/* After each *completed* scan, retire the asynchronous reader without
+ * starting new I/O. Reopen lazily on the first read of the next scan.
+ *
+ * jackhmmer calls rewind twice after the final iteration (once for the
+ * iteration and once for the query). An eager reopen followed by Close()
+ * on an unconsumed prefetch queue can deadlock Easel's loader waiting
+ * for recycled chunks. A second rewind must therefore be a no-op. */
 static int
 msa_dsq_rewind(ESL_ALPHABET *abc)
 {
-  ESL_ALPHABET *expected = abc;
   int status;
-  if (!msa_dsq_reader.dd || !msa_dsq_reader.basename) return eslEINVAL;
+  (void)abc;
+  if (!msa_dsq_reader.basename) return eslEINVAL;
+  if (!msa_dsq_reader.dd) return eslOK;
+
   if (msa_dsq_reader.chunk) {
-    status=esl_dsqdata_Recycle(msa_dsq_reader.dd, msa_dsq_reader.chunk);
-    if (status!=eslOK) return status;
-    msa_dsq_reader.chunk=NULL;
+    status = esl_dsqdata_Recycle(msa_dsq_reader.dd, msa_dsq_reader.chunk);
+    if (status != eslOK) return status;
+    msa_dsq_reader.chunk = NULL;
   }
-  status=esl_dsqdata_Close(msa_dsq_reader.dd);
-  msa_dsq_reader.dd=NULL;
-  if (status!=eslOK) return status;
-  status=esl_dsqdata_OpenWithUnpackers(
-      &expected, msa_dsq_reader.basename, 1, msa_dsq_reader.n_unpackers,
-      &msa_dsq_reader.dd);
-  if (status!=eslOK) return status;
-  msa_dsq_reader.offset=0;
-  msa_dsq_reader.next_index=0;
+  status = esl_dsqdata_Close(msa_dsq_reader.dd);
+  msa_dsq_reader.dd = NULL;
+  if (status != eslOK) return status;
+  msa_dsq_reader.offset = 0;
+  msa_dsq_reader.next_index = 0;
   return eslOK;
 }
 
@@ -114,7 +117,14 @@ msa_dsq_read(ESL_SQ *sq)
   ESL_DSQDATA_CHUNK *chunk;
   int index, status;
   int64_t length;
-  if (!msa_dsq_reader.dd || !sq || !sq->dsq) return eslEINVAL;
+  if (!sq || !sq->dsq || !msa_dsq_reader.basename) return eslEINVAL;
+  if (!msa_dsq_reader.dd) {
+    ESL_ALPHABET *expected = (ESL_ALPHABET *)sq->abc;
+    status = esl_dsqdata_OpenWithUnpackers(
+        &expected, msa_dsq_reader.basename, 1, msa_dsq_reader.n_unpackers,
+        &msa_dsq_reader.dd);
+    if (status != eslOK) return status;
+  }
   while (!msa_dsq_reader.chunk ||
          msa_dsq_reader.offset>=msa_dsq_reader.chunk->N) {
     if (msa_dsq_reader.chunk) {
