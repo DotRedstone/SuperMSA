@@ -18,10 +18,6 @@ test ! -e "$RUN/results" && test ! -e "$SUMMARY" || die "pilot already exists"
 test -s "$INPUT/database.fasta" && test -s "$INPUT/baseline_roc10.tsv" || die "input missing"
 test -s "$QFILE" && test -d "$REF_TBL" || die "reference queries or tables missing"
 test -x "$SRC/src/jackhmmer" || die "candidate not built"
-if [ "$FEATURE" = t2 ]; then
-  test -x "$SRC/scripts/fasta_to_bin8_reference" || die "missing pinned reference converter"
-  test -x "$SRC/scripts/fasta_to_bin8" || die "missing optimized converter"
-fi
 mkdir -p "$RUN/data/query" "$RUN/results"
 ln -s "$INPUT/database.fasta" "$RUN/data/database.fasta"
 ln -s "$INPUT/baseline_roc10.tsv" "$RUN/data/baseline_roc10.tsv"
@@ -55,12 +51,9 @@ for i in "${!modes[@]}"; do
   export MSA_FASTA_ONEPASS=0
   export BIN8_PREPROCESS=0 HUFF_PREPROCESS=0 DSQDATA_PREPROCESS=0
   unset BIN8_CONVERTER MSA_BIN8_DB MSA_DSQDATA_DB
-  case "$FEATURE:$mode" in
-    t1:tuned) export MSA_FASTA_ONEPASS=1;;
-    t2:base) export BIN8_PREPROCESS=1 BIN8_CONVERTER="$SRC/scripts/fasta_to_bin8_reference";;
-    t2:tuned) export BIN8_PREPROCESS=1 BIN8_CONVERTER="$SRC/scripts/fasta_to_bin8";;
-    t4:tuned) export MSA_WQ_SIGNAL_ONE=1;;
-  esac
+  # Only queue wakeup policy varies. All other input/search settings
+  # and the compiled binary remain identical across the ABBA quartet.
+  if [ "$mode" = tuned ]; then export MSA_WQ_SIGNAL_ONE=1; fi
   echo "BEGIN feature=$FEATURE mode=$mode $(date -Is)"
   DATA="$RUN/data" OUT="$OUT" bash "$SRC/prologue.sh" > "$RUN/$trial-$mode.prologue.log" 2>&1 ||
     { tail -n 70 "$RUN/$trial-$mode.prologue.log" >&2; die "prologue failed"; }
