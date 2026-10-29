@@ -29,7 +29,8 @@ def check(ref_rows, got_rows, expect_ok, label):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--queries",
              str(path / "queries.selected"), str(a), str(b)],
-            capture_output=True, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True,
         )
         if (result.returncode == 0) != expect_ok:
             raise AssertionError(
