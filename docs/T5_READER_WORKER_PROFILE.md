@@ -74,3 +74,28 @@ probe=$(sbatch --parsable --dependency="afterok:$smoke" --kill-on-invalid-dep=ye
 probe="${probe%%;*}"
 printf 'smoke_job=%s\nprobe_job=%s\n' "$smoke" "$probe" | tee job_ids.txt
 ```
+
+## THUSCC26 competition timing compliance — development-only
+
+THUSCC26 SuperMSA official scoring is `prologue time + search time` for all
+100 queries; one-off preprocessing belongs to prologue, and only the
+specified warmup is excluded. Submitted stdout must be the complete
+unaltered log from one run. References:
+
+- https://lab.cs.tsinghua.edu.cn/scc/Applications/SuperMSA/
+- https://lab.cs.tsinghua.edu.cn/scc/
+
+**T5 is never a score submission.** `job_reader_profile_probe.slurm`
+runs one query twice solely for diagnostics. It is not a full 100-query
+competition job and must not be sent to the scoring server. The internal
+`gettimeofday` instrumentation only reports read, queue, and worker
+subcomponent durations to stderr; it must never replace or subtract from
+`prologue time` or `search time`, shift startup/preprocessing outside the
+measured interval, or retroactively modify submitted logs.
+
+Measured profiling overhead is part of elapsed wall time whenever profiling
+is enabled. For competitive timing use the uninstrumented performance
+build/branch (preferred), not a profiled run. Keep this T5 branch separate
+from the final scoring branch and document that profiling was used only
+during development. The no-profiling default is not a substitute for
+rebuilding the final submission from audited sources.
