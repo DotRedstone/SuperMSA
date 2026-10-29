@@ -4,7 +4,7 @@ set -euo pipefail
 : "${SLURM_JOB_ID:?Run via sbatch}"
 : "${SLURM_SUBMIT_DIR:?Run via sbatch}"
 : "${SLURM_CPUS_PER_TASK:?Missing CPU allocation}"
-FEATURE="e05"
+FEATURE="e06"
 RUN="$SLURM_SUBMIT_DIR"
 SRC="$RUN/source"
 ROOT="$HOME/WORK/dot"
@@ -47,12 +47,13 @@ for i in "${!modes[@]}"; do
   trial=$(printf '%02d' "$((i+1))")
   OUT="$RUN/results/$trial-$mode"
   mkdir -p "$OUT"
-  # Compare T1 digital FASTA baseline against only the E05 direct-map knob.
-  export MSA_FASTA_ONEPASS=1 MSA_FASTA_DIRECT_MAP=0
+  # E06 ABBA: both sides enable E01+E05; only per-file env caching varies.
+  export MSA_FASTA_ONEPASS=1 MSA_FASTA_DIRECT_MAP=1
+  export MSA_FASTA_CACHE_FLAGS=0
   export MSA_BLOCK_SEQS=1000 MSA_QUEUE_FACTOR=2
   export BIN8_PREPROCESS=0 HUFF_PREPROCESS=0 DSQDATA_PREPROCESS=0
   unset BIN8_CONVERTER MSA_BIN8_DB MSA_DSQDATA_DB
-  if [ "$mode" = tuned ]; then export MSA_FASTA_DIRECT_MAP=1; fi
+  if [ "$mode" = tuned ]; then export MSA_FASTA_CACHE_FLAGS=1; fi
   echo "BEGIN feature=$FEATURE mode=$mode $(date -Is)"
   DATA="$RUN/data" OUT="$OUT" bash "$SRC/prologue.sh" > "$RUN/$trial-$mode.prologue.log" 2>&1 ||
     { tail -n 70 "$RUN/$trial-$mode.prologue.log" >&2; die "prologue failed"; }
