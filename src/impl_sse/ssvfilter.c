@@ -427,6 +427,19 @@
 #define  MAX_BANDS 6
 #endif
 
+/* Experiment-only tuning knob. Keep MAX_BANDS unchanged: the generated
+ * calc_band_N functions and function pointer table depend on that limit.
+ * A smaller SSV_BAND_LIMIT changes how many stripes each sweep processes,
+ * but leaves the score calculation and safety/fallback checks intact.
+ * Default to the original behavior unless explicitly overridden by CFLAGS.
+ */
+#ifndef SSV_BAND_LIMIT
+#define SSV_BAND_LIMIT MAX_BANDS
+#endif
+#if SSV_BAND_LIMIT < 1 || SSV_BAND_LIMIT > MAX_BANDS
+#error "SSV_BAND_LIMIT must be between 1 and MAX_BANDS"
+#endif
+
 
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
@@ -858,7 +871,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   xEv    =  beginv;
 
   /* Use the highest number of bands but no more than MAX_BANDS */
-  bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
+  bands = (Q + SSV_BAND_LIMIT - 1) / SSV_BAND_LIMIT;
 
   for (i = 0; i < bands; i++) {
     q = (Q * (i + 1)) / bands;
