@@ -176,6 +176,22 @@ esl_sqascii_Open(char *filename, int format, ESL_SQFILE *sqfp)
   ascii->skip_header  = NULL;
   ascii->parse_end    = NULL;
 
+  /* E06: env flags are constant during a benchmark process. Opt-in caching
+   * avoids repeated getenv()/strcmp() for every FASTA record. Preserve the
+   * E01/E05 per-record behavior when MSA_FASTA_CACHE_FLAGS is not 1. */
+  {
+    const char *cache = getenv("MSA_FASTA_CACHE_FLAGS");
+    ascii->fasta_cache_flags = (cache && strcmp(cache, "1") == 0);
+    ascii->fasta_onepass_enabled = 0;
+    ascii->fasta_direct_map_enabled = 0;
+    if (ascii->fasta_cache_flags) {
+      const char *onepass = getenv("MSA_FASTA_ONEPASS");
+      const char *map = getenv("MSA_FASTA_DIRECT_MAP");
+      ascii->fasta_onepass_enabled = (onepass && strcmp(onepass, "1") == 0);
+      ascii->fasta_direct_map_enabled = (map && strcmp(map, "1") == 0);
+    }
+  }
+
   ascii->afp        = NULL;
   ascii->msa        = NULL;
   ascii->idx        = -1;
@@ -789,11 +805,18 @@ sqascii_Read(ESL_SQFILE *sqfp, ESL_SQ *sq)
   /* Read() and ReadBlock() use this path. Default to upstream
    * behavior; opt in only for digital, ordinary FASTA target reads. */
   {
-    const char *opt = getenv("MSA_FASTA_ONEPASS");
-    int fused = (opt && strcmp(opt, "1") == 0 &&
-                 sqfp->format == eslSQFILE_FASTA && sq->dsq != NULL);
-    const char *mapopt = getenv("MSA_FASTA_DIRECT_MAP");
-    int direct_map = (fused && mapopt && strcmp(mapopt, "1") == 0);
+    int onepass, direct_map, fused;
+    if (ascii->fasta_cache_flags) {
+      onepass = ascii->fasta_onepass_enabled;
+      direct_map = ascii->fasta_direct_map_enabled;
+    } else {
+      const char *opt = getenv("MSA_FASTA_ONEPASS");
+      const char *mapopt = getenv("MSA_FASTA_DIRECT_MAP");
+      onepass = (opt && strcmp(opt, "1") == 0);
+      direct_map = (mapopt && strcmp(mapopt, "1") == 0);
+    }
+    fused = (onepass && sqfp->format == eslSQFILE_FASTA && sq->dsq != NULL);
+    direct_map = (fused && direct_map);
     do {
       if (fused) {
         status = fasta_readbuf_onepass(sqfp, sq, &n, &epos, direct_map);
