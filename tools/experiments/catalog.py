@@ -22,6 +22,8 @@ RECORD_FIELDS = (
     "provenance_path", "query_set_path", "raw_log_paths", "review_class",
 )
 TRIAL_BASE_FIELDS = ("record_path", "summary_path") + SUMMARY_FIELDS
+ALIAS_FIELDS = ("alias_path", "canonical_path")
+SUPPORT_FIELDS = ("file_path", "role", "size_bytes")
 TASKS = {
     "e01-fasta-onepass": "DP-01",
     "e02-bin8-batched-io": "DP-03",
@@ -30,6 +32,17 @@ TASKS = {
     "e05-fasta-direct-map": "DP-01",
     "e06-fasta-config-cache": "DP-01",
     "p01-reader-worker-profile": "EV-02",
+}
+PROBE_TASKS = {
+    "bin8-build-r01": "DP-02",
+    "bin8-sweep-r01": "DP-02",
+    "candidate-repeat-r01": "QS-01",
+    "fasta-preprocess-r01": "DP-01",
+    "four-formats-sweep-r01": "EV-01",
+    "four-way-build-r01": "DP-02",
+    "parallel-scan-20261028_230525": "QS-01",
+    "ssv-band-build-r01": "CK-01",
+    "ssv-band-sweep-r01": "CK-01",
 }
 
 
@@ -142,8 +155,8 @@ def collect(workspace):
     probes = experiments / "probes"
     if probes.is_dir():
         for directory in sorted(probes.iterdir()):
-            if directory.is_dir() and directory.name != "experiments":
-                items.append(("PROBE", directory, UNKNOWN, directory.name, directory.name))
+            if directory.is_dir() and not directory.is_symlink() and directory.name != "experiments":
+                items.append(("PROBE", directory, PROBE_TASKS.get(directory.name, UNKNOWN), directory.name, directory.name))
         historical = probes / "experiments"
         if historical.is_dir():
             for variant in sorted(historical.iterdir()):
@@ -171,6 +184,59 @@ def collect(workspace):
     return records, trials
 
 
+def collect_aliases(workspace, records):
+    probes = workspace / "experiments" / "supermsa" / "probes"
+    canonical = {row["record_path"] for row in records}
+    aliases = []
+    if probes.is_dir():
+        for entry in sorted(probes.iterdir()):
+            if not entry.is_symlink():
+                continue
+            target = entry.resolve(strict=True)
+            target_path = relative(workspace, target)
+            if target_path not in canonical:
+                raise ValueError("alias target is not indexed: " + relative(workspace, entry))
+            aliases.append({"alias_path": relative(workspace, entry), "canonical_path": target_path})
+    return aliases
+
+
+def create_view(workspace, snapshot_dir, records):
+    view = snapshot_dir / "by-task"
+    for row in records:
+        destination = view / row["task_id"] / row["variant"] / row["run_id"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() or destination.is_symlink():
+            raise ValueError("duplicate view path: " + str(destination.relative_to(snapshot_dir)))
+        target = workspace / row["record_path"]
+        if not target.exists():
+            raise FileNotFoundError(str(target))
+        destination.symlink_to(os.path.relpath(target, destination.parent))
+
+
+def collect_supporting(workspace):
+    root = workspace / "experiments" / "supermsa"
+    directories = (root, root / "probes", root / "analysis", root / "scripts")
+    files = sorted(path for directory in directories if directory.is_dir()
+                   for path in directory.iterdir() if path.is_file() and not path.is_symlink())
+    result = []
+    for path in files:
+        if path.suffix == ".tar":
+            role = "SOURCE_ARCHIVE"
+        elif path.suffix == ".commit":
+            role = "SOURCE_COMMIT_MARKER"
+        elif path.suffix in (".sh", ".slurm", ".py"):
+            role = "SCRIPT"
+        elif path.suffix in (".out", ".log"):
+            role = "LOG"
+        elif path.parent.name == "analysis" or path.suffix in (".tsv", ".txt"):
+            role = "ANALYSIS"
+        else:
+            role = "OTHER"
+        result.append({"file_path": relative(workspace, path), "role": role,
+                       "size_bytes": str(path.stat().st_size)})
+    return result
+
+
 def write_tsv(path, fields, rows):
     with path.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t", lineterminator="\n")
@@ -188,6 +254,8 @@ def create_catalog(workspace, snapshot):
         raise ValueError("snapshot must contain only letters, digits, underscore or hyphen")
     workspace = workspace.resolve()
     records, trials = collect(workspace)
+    aliases = collect_aliases(workspace, records)
+    supporting = collect_supporting(workspace)
     parent = workspace / "experiments" / "supermsa" / "catalog"
     if parent.is_symlink():
         raise ValueError("catalog parent must not be a symlink")
@@ -199,19 +267,26 @@ def create_catalog(workspace, snapshot):
     temporary.mkdir()
     write_tsv(temporary / "records.tsv", RECORD_FIELDS, records)
     write_tsv(temporary / "trials.tsv", trial_fields(trials), trials)
+    write_tsv(temporary / "aliases.tsv", ALIAS_FIELDS, aliases)
+    write_tsv(temporary / "supporting.tsv", SUPPORT_FIELDS, supporting)
+    create_view(workspace, temporary, records)
     manifest = {
         "schema_version": 1,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "record_count": len(records),
         "trial_count": len(trials),
+        "alias_count": len(aliases),
+        "supporting_count": len(supporting),
         "path_base": "WORK/dot",
         "source_policy": "Existing files are referenced and not modified.",
     }
     (temporary / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     (temporary / "README.md").write_text(
         "# SuperMSA 实验索引快照\n\n"
-        "路径相对于 `WORK/dot`。`records.tsv` 列出原目录与已有证据；"
+        "路径相对于 `WORK/dot`。`records.tsv` 列出不重复的原目录与已有证据；"
         "`trials.tsv` 按原列名摘录现有 `summary.tsv` 的试验行；"
+        "`aliases.tsv` 记录历史符号链接；`by-task/` 是指向原文件的分类链接视图。"
+        "`supporting.tsv` 列出顶层脚本、源码包、分析文件和日志，不推断其与运行的对应关系。"
         "不同来源没有的列留空，`summary_path` 指向原表。"
         "`HEADER_ONLY` 表示摘要只有表头，不能视为完成。"
         "`UNVERIFIED` 表示未从约定的原始文件核实；"
