@@ -24,8 +24,32 @@ export REPO DATA OUT
 elapsed() { awk -v a="$1" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}'; }
 
 prepare() {
-    # 在此填写预处理步骤:
-    :
+    # Experimental FASTA preprocessing, explicitly opt in with
+    # FASTA_PREPROCESS=1 at sbatch submission. With the default value 0,
+    # the original baseline behavior is preserved.
+    if [ "${FASTA_PREPROCESS:-0}" = 1 ]; then
+        local converter="$REPO/scripts/fasta_rewrap"
+        local prepared="$OUT/prepared/database.fasta"
+        local tmp
+
+        [ -x "$converter" ] || { echo "ERROR: compile $converter on test01 first" >&2; return 1; }
+        [ -s "$DATA/database.fasta" ] || { echo "ERROR: missing original FASTA database" >&2; return 1; }
+        mkdir -p "$OUT/prepared"
+        [ ! -e "$prepared" ] || { echo "ERROR: prepared database already exists; use a fresh OUT" >&2; return 1; }
+        tmp=$(mktemp "$OUT/prepared/.database.XXXXXX") || return 1
+
+        # The full transform starts here, inside the measured prologue.
+        # Never prepare database bytes before the official timed job.
+        if ! "$converter" "$DATA/database.fasta" "$tmp"; then
+            rm -f -- "$tmp"
+            return 1
+        fi
+        if ! mv -f -- "$tmp" "$prepared"; then
+            rm -f -- "$tmp"
+            return 1
+        fi
+        echo "Prepared FASTA: $prepared"
+    fi
 }
 
 echo "预处理开始..."
