@@ -4,7 +4,7 @@ set -euo pipefail
 : "${SLURM_JOB_ID:?Run via sbatch}"
 : "${SLURM_SUBMIT_DIR:?Run via sbatch}"
 : "${SLURM_CPUS_PER_TASK:?Missing CPU allocation}"
-FEATURE="t1"
+FEATURE="e05"
 RUN="$SLURM_SUBMIT_DIR"
 SRC="$RUN/source"
 ROOT="$HOME/WORK/dot"
@@ -18,10 +18,6 @@ test ! -e "$RUN/results" && test ! -e "$SUMMARY" || die "pilot already exists"
 test -s "$INPUT/database.fasta" && test -s "$INPUT/baseline_roc10.tsv" || die "input missing"
 test -s "$QFILE" && test -d "$REF_TBL" || die "reference queries or tables missing"
 test -x "$SRC/src/jackhmmer" || die "candidate not built"
-if [ "$FEATURE" = t2 ]; then
-  test -x "$SRC/scripts/fasta_to_bin8_reference" || die "missing pinned reference converter"
-  test -x "$SRC/scripts/fasta_to_bin8" || die "missing optimized converter"
-fi
 mkdir -p "$RUN/data/query" "$RUN/results"
 ln -s "$INPUT/database.fasta" "$RUN/data/database.fasta"
 ln -s "$INPUT/baseline_roc10.tsv" "$RUN/data/baseline_roc10.tsv"
@@ -51,15 +47,12 @@ for i in "${!modes[@]}"; do
   trial=$(printf '%02d' "$((i+1))")
   OUT="$RUN/results/$trial-$mode"
   mkdir -p "$OUT"
-  export MSA_FASTA_ONEPASS=0 MSA_BLOCK_SEQS=1000 MSA_QUEUE_FACTOR=2
+  # Compare T1 digital FASTA baseline against only the E05 direct-map knob.
+  export MSA_FASTA_ONEPASS=1 MSA_FASTA_DIRECT_MAP=0
+  export MSA_BLOCK_SEQS=1000 MSA_QUEUE_FACTOR=2
   export BIN8_PREPROCESS=0 HUFF_PREPROCESS=0 DSQDATA_PREPROCESS=0
   unset BIN8_CONVERTER MSA_BIN8_DB MSA_DSQDATA_DB
-  case "$FEATURE:$mode" in
-    t1:tuned) export MSA_FASTA_ONEPASS=1;;
-    t2:base) export BIN8_PREPROCESS=1 BIN8_CONVERTER="$SRC/scripts/fasta_to_bin8_reference";;
-    t2:tuned) export BIN8_PREPROCESS=1 BIN8_CONVERTER="$SRC/scripts/fasta_to_bin8";;
-    t3:tuned) export MSA_BLOCK_SEQS=256 MSA_QUEUE_FACTOR=4;;
-  esac
+  if [ "$mode" = tuned ]; then export MSA_FASTA_DIRECT_MAP=1; fi
   echo "BEGIN feature=$FEATURE mode=$mode $(date -Is)"
   DATA="$RUN/data" OUT="$OUT" bash "$SRC/prologue.sh" > "$RUN/$trial-$mode.prologue.log" 2>&1 ||
     { tail -n 70 "$RUN/$trial-$mode.prologue.log" >&2; die "prologue failed"; }
