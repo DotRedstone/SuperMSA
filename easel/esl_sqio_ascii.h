@@ -55,6 +55,7 @@ typedef struct esl_sqascii_s {
 
   /* Format-specific configuration                                           */
   int   is_linebased;	      /* TRUE for fgets() parsers; FALSE for fread() */
+  int   fasta_read_chunk;  /* E07: bytes per fread; defaults to eslREADBUFSIZE */
   int   eof_is_ok;	      /* TRUE if record can end on EOF               */
   int  (*parse_header)(struct esl_sqio_s *, ESL_SQ *sq);
   int  (*skip_header) (struct esl_sqio_s *, ESL_SQ *sq);
