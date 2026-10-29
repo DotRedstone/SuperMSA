@@ -108,6 +108,31 @@ candidates, run an **interleaved four-format benchmark on the same node**
 before making an official final comparison. Results on 12 queries also
 do not establish 100-query performance.
 
+## 2026-10-29: DSQDATA toy smoke deadlock and fix
+
+The first `--cpu 0 -N 1` DSQDATA search passed no further output
+for more than five minutes, with three sleeping threads (main, loader,
+unpacker). The native converter, full 15,177-record exact-roundtrip
+check, BIN8, and Huffman checks had already passed.
+
+Root cause identified in the JackHMMER adapter: after every iteration
+JackHMMER rewinds its target database, and after every query it rewinds
+again. Our original DSQDATA implementation did a **close + immediate
+asynchronous reopen** at the first rewind. The second rewind then
+called `esl_dsqdata_Close()` on a reader whose prefetch chunks had
+never been consumed or recycled; Easel's close joins a loader that
+waits for all outstanding chunks to be recycled. This can deadlock.
+
+The corrected reader creates its async pipeline **lazily on first
+target read**, and `msa_dsq_rewind()` only closes the fully consumed
+reader. If already closed, rewind is a no-op; the next actual read
+opens a fresh reader. `jackhmmer.c` tests the logical active
+basename, not whether an async reader object is currently open.
+The smoke script uses `MSA_DSQ_UNPACKERS=1` (the official comparison's
+budget) and enforces a 120-second timeout per toy search. The code
+change must be rebuilt and rerun on test01; it is not automatically
+applied to copies already uploaded to the cluster.
+
 ## Design limitations
 
 The DSQDATA bridge copies each unpacked sequence into a JackHMMER
