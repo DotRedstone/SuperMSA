@@ -24,6 +24,37 @@ export REPO DATA OUT
 elapsed() { awk -v a="$1" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}'; }
 
 prepare() {
+    if [ "${DSQDATA_PREPROCESS:-0}" = 1 ]; then
+        if [ "${BIN8_PREPROCESS:-0}" = 1 ] ||
+           [ "${HUFF_PREPROCESS:-0}" = 1 ]; then
+            echo "ERROR: only one binary encoding may be enabled" >&2
+            return 1
+        fi
+        local writer="$REPO/scripts/fasta_to_dsqdata"
+        local prefix="$OUT/prepared/database"
+        local f total
+        [ -x "$writer" ] || { echo "ERROR: missing DSQDATA writer" >&2; return 1; }
+        [ -s "$DATA/database.fasta" ] || { echo "ERROR: missing original FASTA" >&2; return 1; }
+        mkdir -p "$OUT/prepared"
+        for f in "$prefix" "$prefix.dsqi" "$prefix.dsqm" "$prefix.dsqs"; do
+            [ ! -e "$f" ] || {
+                echo "ERROR: DSQDATA artifact exists: $f; use a fresh OUT" >&2
+                return 1
+            }
+        done
+        # Every byte of conversion is produced during timed prepare().
+        if ! "$writer" "$DATA/database.fasta" "$prefix"; then
+            rm -f -- "$prefix" "$prefix.dsqi" "$prefix.dsqm" "$prefix.dsqs"
+            return 1
+        fi
+        total=0
+        for f in "$prefix" "$prefix.dsqi" "$prefix.dsqm" "$prefix.dsqs"; do
+            [ -s "$f" ] || { echo "ERROR: incomplete DSQDATA artifact" >&2; return 1; }
+            total=$((total + $(stat -c '%s' "$f")))
+        done
+        echo "DSQDATA_FILE_BYTES=$total"
+        echo "DSQDATA_PREPARED=$prefix"
+    fi
     if [ "${HUFF_PREPROCESS:-0}" = 1 ]; then
         # Conversion and compression happen from original FASTA *inside*
         # this timed function. Intermediate BIN8 is never reused.
