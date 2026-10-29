@@ -1,14 +1,12 @@
 /*
- * Experimental read-only 8-bit digital database for jackhmmer.
- * Format: "MSA8DB01" followed by records; each record has five
- * little-endian u32 values: name length, accession length,
- * description length, sequence length, tax_id (bit representation).
- * Payload: name, accession, description, then L digital ESL_DSQ bytes
- * (without sentinels). This file is always created from the original
- * FASTA by the timed prologue, using Easel's own digital reader.
+ * Experimental read-only digital target database for jackhmmer.
+ * Supports MSA8DB01 (8-bit per residue) and MSAHUF01 (canonical
+ * Huffman bitstream per record). Both represent the exact same Easel
+ * digital residues and preserve all metadata and sequence order.
+ * Compressed files are decoded into existing ESL_SQ worker buffers.
+ * Files are produced only inside the timed prologue from raw FASTA.
  *
- * This header is intentionally private to jackhmmer; its functions are
- * static, so no Makefile edits or linker changes are needed.
+ * Private to jackhmmer: static functions, no new linker dependencies.
  */
 #ifndef MSA_BIN8_H
 #define MSA_BIN8_H
