@@ -22,20 +22,29 @@ tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 "$PACKER" "$DB" "$tmp/data.bin8"
 
-COMMON=(--cpu "$CPU" --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 -N 3 -E 0.001 -o /dev/null)
-env -u MSA_BIN8_DB "$BIN" "${COMMON[@]}" \
-  --tblout "$tmp/raw.tbl" -A "$tmp/raw.sto" "$QUERY" "$DB"
-MSA_BIN8_DB="$tmp/data.bin8" "$BIN" "${COMMON[@]}" \
-  --tblout "$tmp/bin8.tbl" -A "$tmp/bin8.sto" "$QUERY" "$DB"
+# Cover the serial path (--cpu 0), the threaded path (--cpu 2),
+# and both a single database pass and multi-iteration rewind.
+for workers in 0 2; do
+  for iters in 1 3; do
+    prefix="$tmp/cpu${workers}-n${iters}"
+    COMMON=(--cpu "$workers" --noali --F1 0.0005 --F2 5e-05 --F3 5e-07
+            -N "$iters" -E 0.001 -o /dev/null)
 
-awk 'NF && $0 !~ /^#/' "$tmp/raw.tbl" > "$tmp/raw.hits"
-awk 'NF && $0 !~ /^#/' "$tmp/bin8.tbl" > "$tmp/bin8.hits"
-test -s "$tmp/raw.hits" || { echo "ERROR: no demo hits" >&2; exit 1; }
-diff -u "$tmp/raw.hits" "$tmp/bin8.hits"
-test -f "$tmp/raw.sto" && test -f "$tmp/bin8.sto"
-diff -u "$tmp/raw.sto" "$tmp/bin8.sto" || {
-  echo "WARNING: MSA differs in demo test" >&2
-  exit 1
-}
+    env -u MSA_BIN8_DB "$BIN" "${COMMON[@]}" \
+      --tblout "$prefix.raw.tbl" -A "$prefix.raw.sto" "$QUERY" "$DB"
+    MSA_BIN8_DB="$tmp/data.bin8" "$BIN" "${COMMON[@]}" \
+      --tblout "$prefix.bin8.tbl" -A "$prefix.bin8.sto" "$QUERY" "$DB"
 
-echo "PASS: bin8 and raw FASTA give identical demo hit rows and Stockholm MSA"
+    awk 'NF && $0 !~ /^#/' "$prefix.raw.tbl" > "$prefix.raw.hits"
+    awk 'NF && $0 !~ /^#/' "$prefix.bin8.tbl" > "$prefix.bin8.hits"
+    test -s "$prefix.raw.hits" ||
+      { echo "ERROR: demo FASTA produced no hits ($workers threads, $iters iterations)" >&2; exit 1; }
+    diff -u "$prefix.raw.hits" "$prefix.bin8.hits" ||
+      { echo "FAIL: hit-table mismatch workers=$workers iterations=$iters" >&2; exit 1; }
+    test -f "$prefix.raw.sto" && test -f "$prefix.bin8.sto"
+    diff -u "$prefix.raw.sto" "$prefix.bin8.sto" ||
+      { echo "FAIL: Stockholm mismatch workers=$workers iterations=$iters" >&2; exit 1; }
+    echo "PASS: raw/bin8 identical, workers=$workers iterations=$iters"
+  done
+done
+echo "PASS: bin8 serial/threaded and single/multi-iteration smoke checks"
