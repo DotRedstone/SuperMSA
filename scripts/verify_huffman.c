@@ -70,7 +70,7 @@ int main(int argc,char **argv) {
     size_t mlen;
     x=read_rec(&a,0,as,&am,&ad,&a_bytes);
     y=read_rec(&b,1,bs,&bm,&bd,&b_bytes);
-    if(x==0 && y==0) {ok=1;break;}
+    if(x==0 && y==0) {ok=(count>0);break;}
     if(x!=1 || y!=1 || memcmp(as,bs,sizeof(as))!=0) break;
     mlen=(size_t)as[0]+as[1]+as[2];
     if(memcmp(am,bm,mlen)!=0) break;
