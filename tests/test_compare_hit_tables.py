@@ -8,11 +8,11 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "compare_hit_tables.py"
 
 
-def row(target, score, best_e, full_e="4.2e-44", doms="1"):
+def row(target, score, best_e, full_e="4.2e-44", doms="1", bias=7.1):
     # HMMER tblout fields 0..17 plus nonempty free-form description.
     return (
-        f"{target} - toy - {full_e} {score:.1f} 7.1 "
-        f"{best_e} {score:.1f} 7.1 1.0 {doms} 0 0 "
+        f"{target} - toy - {full_e} {score:.1f} {bias:.1f} "
+        f"{best_e} {score:.1f} {bias:.1f} 1.0 {doms} 0 0 "
         f"{doms} {doms} 1 1 a.208.1.1 |target description"
     )
 
@@ -48,6 +48,10 @@ def main():
     check([aa, bb, cc], [bb, aa_rounded, cc], True,
           "tied score reorder and printed E-value drift")
     check([aa, bb, cc], [aa, bb, cc], True, "exact rows")
+    check([aa, bb, cc], [row("A", 161.2, "4.8e-44", bias=6.8), bb, cc],
+          True, "observed cross-build 0.3 bias drift")
+    check([aa, bb, cc], [row("A", 161.2, "4.8e-44", bias=6.7), bb, cc],
+          False, "unobserved 0.4 bias drift still rejected")
     check([aa, bb, cc], [aa_rounded, cc, bb], False, "non-tied rank inversion")
     check([aa, bb, cc], [aa_rounded, bb], False, "dropped hit")
     check([aa, bb, cc], [aa_rounded, bb, row("D", 120.0, "1.1e-30")],
