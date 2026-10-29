@@ -18,11 +18,17 @@ gcc -O3 -std=c99 -Wall -Wextra \
       tail -n 100 huffman.converter-build.log >&2
       exit 1
     }
+gcc -O3 -std=c99 -Wall -Wextra \
+    -o scripts/verify_huffman scripts/verify_huffman.c \
+    > huffman.verifier-build.log 2>&1 || {
+      tail -n 100 huffman.verifier-build.log >&2
+      exit 1
+    }
 bash tests/test_huffman_smoke.sh > huffman.smoke.log 2>&1 || {
     tail -n 120 huffman.smoke.log >&2
     exit 1
 }
 cat huffman.smoke.log
-sha256sum src/jackhmmer scripts/fasta_to_bin8 scripts/bin8_to_huffman \
+sha256sum src/jackhmmer scripts/fasta_to_bin8 scripts/bin8_to_huffman scripts/verify_huffman \
     > huffman.binaries.sha256
 echo "HUFFMAN_BUILD_AND_SMOKE=PASS"
