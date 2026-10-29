@@ -151,13 +151,21 @@ def main():
     if not query_ids or len(query_ids) != len(set(query_ids)):
         raise Difference("missing or duplicate queries")
     expected = set(query_ids)
-    for directory in (args.reference, args.candidate):
-        actual = {p.stem for p in directory.glob("*.tbl")}
-        if actual != expected:
-            raise Difference(
-                f"{directory}: missing={sorted(expected-actual)[:5]} "
-                f"unexpected={sorted(actual-expected)[:5]}"
-            )
+    # The historical reference directory may contain extra unrelated
+    # queries. Compare exactly the selected 12; never accept missing
+    # reference files or unexpected current-run output files.
+    reference_files = {p.stem for p in args.reference.glob("*.tbl")}
+    candidate_files = {p.stem for p in args.candidate.glob("*.tbl")}
+    if not expected.issubset(reference_files):
+        raise Difference(
+            f"{args.reference}: missing reference queries="
+            f"{sorted(expected-reference_files)[:5]}"
+        )
+    if candidate_files != expected:
+        raise Difference(
+            f"{args.candidate}: missing={sorted(expected-candidate_files)[:5]} "
+            f"unexpected={sorted(candidate_files-expected)[:5]}"
+        )
     hits = moved = deltas = 0
     for sid in query_ids:
         count, order_changes, e_delta = validate_pair(
