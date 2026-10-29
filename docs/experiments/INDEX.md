@@ -15,7 +15,7 @@ python3 tools/experiments/catalog.py --workspace "$HOME/WORK/dot" --dry-run
 python3 tools/experiments/catalog.py --workspace "$HOME/WORK/dot"
 ```
 
-脚本只在 `experiments/supermsa/catalog/<UTC 时间>/` 写入新快照，输出 `records.tsv`、`trials.tsv` 和说明，不移动或修改原实验。重复快照名会报错。`summary.tsv` 仅有表头时记为 `HEADER_ONLY`，不算完成；未找到证据的字段记为 `UNVERIFIED`，历史记录的迁移分类保持 `UNKNOWN`。新实验的 `run.json` 可从 [`run.template.json`](../../tools/experiments/run.template.json) 开始填写，完成后须将未核实字段明确标为 `UNVERIFIED`。
+脚本只在 `experiments/supermsa/catalog/<UTC 时间>/` 写入新快照，输出 `records.tsv`、`trials.tsv` 和说明，不移动或修改原实验。`trials.tsv` 保留各类摘要的原列名；某来源不存在的列留空，`summary_path` 指向原表。重复快照名会报错。`summary.tsv` 仅有表头时记为 `HEADER_ONLY`，不算完成；未找到证据的字段记为 `UNVERIFIED`，历史记录的迁移分类保持 `UNKNOWN`。新实验的 `run.json` 可从 [`run.template.json`](../../tools/experiments/run.template.json) 开始填写，完成后须将未核实字段明确标为 `UNVERIFIED`。
 
 ## 待核对的历史来源
 
