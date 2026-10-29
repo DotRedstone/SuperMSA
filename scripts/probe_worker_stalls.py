@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-if len(sys.argv) < 5 or sys.argv[2] != "--":
+if len(sys.argv) < 4 or sys.argv[2] != "--":
     raise SystemExit("usage: probe_worker_stalls.py REPORT.tsv -- executable args...")
 report = Path(sys.argv[1])
 cmd = sys.argv[3:]
