@@ -39,6 +39,7 @@ esl_workqueue_Create(int size)
   int             i;
   int             status;
   ESL_WORK_QUEUE *queue = NULL;
+  const char     *signal_env = getenv("MSA_WQ_SIGNAL_ONE");
 
   ESL_ALLOC(queue, sizeof(ESL_WORK_QUEUE));
 
@@ -55,8 +56,7 @@ esl_workqueue_Create(int size)
   /* A single produced buffer needs only one sleeping consumer.
    * Keep upstream broadcast as default until A/B correctness/performance
    * are verified. Read the environment just once, not per enqueue. */
-  queue->msa_signal_one = (getenv("MSA_WQ_SIGNAL_ONE") != NULL &&
-                           strcmp(getenv("MSA_WQ_SIGNAL_ONE"), "1") == 0);
+  queue->msa_signal_one = (signal_env != NULL && strcmp(signal_env, "1") == 0);
 
   if (pthread_mutex_init(&queue->queueMutex, NULL) != 0)     ESL_XEXCEPTION(eslESYS, "mutex init failed");
 
