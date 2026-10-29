@@ -21,6 +21,7 @@ trap 'rm -rf -- "$tmp"' EXIT
 "$PACK8" "$DB" "$tmp/data.bin8"
 "$PACKH" "$tmp/data.bin8" "$tmp/data.huf"
 test -s "$tmp/data.huf"
+"$REPO/scripts/verify_huffman" "$tmp/data.bin8" "$tmp/data.huf"
 printf 'TOY_DATA_BYTES original=%s bin8=%s huffman=%s\n' \
     "$(stat -c %s "$DB")" "$(stat -c %s "$tmp/data.bin8")" "$(stat -c %s "$tmp/data.huf")"
 
