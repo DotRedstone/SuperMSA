@@ -59,7 +59,12 @@ git archive --format=tar -o /tmp/supermsa-t2-validation-r02.tar \
 git archive --format=tar -o /tmp/supermsa-t3-validation-r02.tar \
   origin/perf/reader-queue-t3 \
   scripts/run_feature_abba.sh scripts/compare_hit_tables.py tests/test_compare_hit_tables.py
-rsync -avP /tmp/supermsa-t{1,2,3}-validation-r02.tar \
+git archive --format=tar -o /tmp/supermsa-r02-helper.tar \
+  origin/perf/reader-queue-t3 scripts/requeue_three_feature_abba_r02.sh
+rsync -avP /tmp/supermsa-t1-validation-r02.tar \
+  /tmp/supermsa-t2-validation-r02.tar \
+  /tmp/supermsa-t3-validation-r02.tar \
+  /tmp/supermsa-r02-helper.tar \
   thuscc26team39@192.168.11.1:/home/thuscc26team39/WORK/dot/experiments/supermsa/probes/
 ```
 
@@ -68,13 +73,11 @@ On ibcln01:
 ```bash
 ROOT="$HOME/WORK/dot/experiments/supermsa/probes"
 cd "$ROOT"
-tar -xOf supermsa-t3.tar scripts/requeue_three_feature_abba_r02.sh > requeue_three_feature_abba_r02.sh
+tar -xOf supermsa-r02-helper.tar scripts/requeue_three_feature_abba_r02.sh > requeue_three_feature_abba_r02.sh
 bash -n requeue_three_feature_abba_r02.sh
 bash requeue_three_feature_abba_r02.sh
 squeue -u "$USER"
 ```
 
-**Important:** the command above extracts the rerun helper from the
-**new latest** full T3 archive, not the original T3 archive uploaded
-before this helper existed. Better: archive this helper explicitly in
-a small additional tar or rerun `git archive` for it and upload.
+The helper is packaged separately so the original full T3 archive can
+remain unchanged. No new compilation or smoke test is required.
