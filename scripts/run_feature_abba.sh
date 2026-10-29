@@ -39,13 +39,10 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$QFILE"
 test "$(wc -l < "$RUN/queries.selected")" -eq 12 || die "expected 12 queries"
 comparetbl(){
-  local from="$1" to="$2" sid
-  while IFS= read -r sid; do
-    test -f "$from/$sid.tbl" && test -f "$to/$sid.tbl" || die "missing $sid table"
-    diff -q <(awk 'NF && $0 !~ /^#/' "$from/$sid.tbl") \
-            <(awk 'NF && $0 !~ /^#/' "$to/$sid.tbl") >/dev/null ||
-      die "hit mismatch: $sid"
-  done < "$RUN/queries.selected"
+  local from="$1" to="$2"
+  python3 "$SRC/scripts/compare_hit_tables.py" \
+    --queries "$RUN/queries.selected" "$to" "$from" ||
+    die "hit-identity/score/ranking validation failed; see comparator diagnostics"
 }
 printf 'trial\tfeature\tmode\tprologue_s\tsearch_s\ttotal_s\tqueries_run\tquality\tidentical_v1\tworker_threads\twarmup_runs\n' > "$SUMMARY"
 modes=(base tuned tuned base)
