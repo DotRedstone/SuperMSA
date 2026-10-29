@@ -52,6 +52,11 @@ esl_workqueue_Create(int size)
 
   queue->queueSize       = size;
   queue->pendingWorkers  = 0;
+  /* A single produced buffer needs only one sleeping consumer.
+   * Keep upstream broadcast as default until A/B correctness/performance
+   * are verified. Read the environment just once, not per enqueue. */
+  queue->msa_signal_one = (getenv("MSA_WQ_SIGNAL_ONE") != NULL &&
+                           strcmp(getenv("MSA_WQ_SIGNAL_ONE"), "1") == 0);
 
   if (pthread_mutex_init(&queue->queueMutex, NULL) != 0)     ESL_XEXCEPTION(eslESYS, "mutex init failed");
 
