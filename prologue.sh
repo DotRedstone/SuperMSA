@@ -24,6 +24,41 @@ export REPO DATA OUT
 elapsed() { awk -v a="$1" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}'; }
 
 prepare() {
+    if [ "${HUFF_PREPROCESS:-0}" = 1 ]; then
+        # Conversion and compression happen from original FASTA *inside*
+        # this timed function. Intermediate BIN8 is never reused.
+        [ "${BIN8_PREPROCESS:-0}" != 1 ] || {
+            echo "ERROR: BIN8_PREPROCESS and HUFF_PREPROCESS are mutually exclusive" >&2
+            return 1
+        }
+        local bin8="$REPO/scripts/fasta_to_bin8"
+        local huff="$REPO/scripts/bin8_to_huffman"
+        local dest="$OUT/prepared/database.huf"
+        local temp8 temph
+        [ -x "$bin8" ] && [ -x "$huff" ] || {
+            echo "ERROR: missing 8-bit or Huffman converter" >&2; return 1
+        }
+        [ -s "$DATA/database.fasta" ] || {
+            echo "ERROR: missing original FASTA" >&2; return 1
+        }
+        mkdir -p "$OUT/prepared"
+        [ ! -e "$dest" ] || {
+            echo "ERROR: prepared Huffman DB exists; use fresh OUT" >&2; return 1
+        }
+        temp8=$(mktemp "$OUT/prepared/.intermediate.XXXXXX") || return 1
+        temph=$(mktemp "$OUT/prepared/.huffman.XXXXXX") || {
+            rm -f -- "$temp8"; return 1
+        }
+        if ! "$bin8" "$DATA/database.fasta" "$temp8" ||
+           ! "$huff" "$temp8" "$temph" ||
+           ! mv -- "$temph" "$dest"; then
+            rm -f -- "$temp8" "$temph"
+            return 1
+        fi
+        rm -f -- "$temp8"
+        stat -c 'HUFF_FILE_BYTES=%s' "$dest"
+        echo "HUFF_PREPARED=$dest"
+    fi
     # Optional 8-bit digital DB. Output is constructed only inside the
     # measured prologue and is never reused across benchmark runs.
     if [ "${BIN8_PREPROCESS:-0}" = 1 ]; then
