@@ -24,7 +24,7 @@ for id in t1 t2 t3; do
       { echo "ERROR: $path missing in $PATCH" >&2; exit 2; }
   done
   mkdir -p "$tmp/$id"
-  tar -xf "$PATCH" -C "$tmp/$id"
+  tar -m -xf "$PATCH" -C "$tmp/$id"
   echo "=== ${id}: comparator unit tests ==="
   python3 "$tmp/$id/tests/test_compare_hit_tables.py"
   echo "=== ${id}: independent r01 base validation against historical V1 ==="
@@ -40,7 +40,7 @@ for id in t1 t2 t3; do
   RUN="$ROOT/$id-abba-r02"
   mkdir -p "$RUN/source"
   cp -a "$OLD/source/." "$RUN/source/"
-  tar -xf "$PATCH" -C "$RUN/source"
+  tar -m -xf "$PATCH" -C "$RUN/source"
   sha256sum "$PATCH" > "$RUN/validation-patch.sha256"
   printf 'reused_compiled_source=%s\nvalidation_patch=%s\n' \
     "$OLD/source" "$PATCH" > "$RUN/provenance.txt"
