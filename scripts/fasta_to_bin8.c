@@ -21,14 +21,34 @@
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
-static int
-write_u32(FILE *f, uint32_t v)
+/* Serialize the 20-byte fixed header followed by all three metadata
+ * fields in one contiguous fwrite. A reusable allocation amortizes
+ * per-record metadata formatting. Sequence payload remains zero-copy
+ * from the reusable Easel digital buffer. */
+static void
+put_u32(unsigned char *b, uint32_t v)
 {
-  unsigned char b[4] = {
-    (unsigned char)(v), (unsigned char)(v >> 8),
-    (unsigned char)(v >> 16), (unsigned char)(v >> 24)
-  };
-  return fwrite(b, 1, 4, f) == 4;
+  b[0] = (unsigned char)v;
+  b[1] = (unsigned char)(v >> 8);
+  b[2] = (unsigned char)(v >> 16);
+  b[3] = (unsigned char)(v >> 24);
+}
+
+static int
+grow_meta(unsigned char **buf, size_t *alloc, size_t need)
+{
+  size_t next = *alloc ? *alloc : 4096;
+  unsigned char *p;
+  if (need <= *alloc) return 0;
+  while (next < need) {
+    if (next > SIZE_MAX / 2) {next = need; break;}
+    next *= 2;
+  }
+  p = realloc(*buf, next);
+  if (p == NULL) return -1;
+  *buf = p;
+  *alloc = next;
+  return 0;
 }
 
 static int
@@ -46,6 +66,8 @@ main(int argc, char **argv)
   FILE *out = NULL;
   int status, success = 0;
   uint64_t count = 0, residues = 0;
+  unsigned char *metabuf = NULL;
+  size_t meta_alloc = 0;
 
   if (argc != 3 || strcmp(argv[1], argv[2]) == 0) {
     fprintf(stderr, "usage: %s original.fasta output.bin8\n", argv[0]);
@@ -62,6 +84,9 @@ main(int argc, char **argv)
   if (sq == NULL) goto DONE;
   out = fopen(argv[2], "wb");
   if (out == NULL) { perror("fasta_to_bin8 fopen"); goto DONE; }
+  /* Buffered IO: avoid libc's small default buffer for many records.
+   * Failure falls back safely to standard buffering. */
+  (void)setvbuf(out, NULL, _IOFBF, 1 << 20);
   if (!write_bytes(out, "MSA8DB01", 8)) goto WRITE_ERROR;
 
   while ((status = esl_sqio_Read(sf, sq)) == eslOK) {
@@ -75,16 +100,31 @@ main(int argc, char **argv)
       goto DONE;
     }
 
-    if (!write_u32(out, (uint32_t)nlen) ||
-        !write_u32(out, (uint32_t)alen) ||
-        !write_u32(out, (uint32_t)dlen) ||
-        !write_u32(out, (uint32_t)sq->n) ||
-        !write_u32(out, (uint32_t)sq->tax_id) ||
-        !write_bytes(out, sq->name, nlen) ||
-        !write_bytes(out, sq->acc, alen) ||
-        !write_bytes(out, sq->desc, dlen) ||
-        !write_bytes(out, sq->dsq + 1, (size_t)sq->n))
-      goto WRITE_ERROR;
+    /* Preserve the exact MSA8DB01 layout; only write batching changes. */
+    if (nlen > SIZE_MAX - alen ||
+        nlen + alen > SIZE_MAX - dlen ||
+        nlen + alen + dlen > SIZE_MAX - 20) {
+      fprintf(stderr, "fasta_to_bin8: oversized metadata\n");
+      goto DONE;
+    }
+    {
+      size_t mlen = nlen + alen + dlen;
+      if (grow_meta(&metabuf, &meta_alloc, 20 + mlen) != 0) {
+        fprintf(stderr, "fasta_to_bin8: metadata allocation failed\n");
+        goto DONE;
+      }
+      put_u32(metabuf,      (uint32_t)nlen);
+      put_u32(metabuf + 4,  (uint32_t)alen);
+      put_u32(metabuf + 8,  (uint32_t)dlen);
+      put_u32(metabuf + 12, (uint32_t)sq->n);
+      put_u32(metabuf + 16, (uint32_t)sq->tax_id);
+      memcpy(metabuf + 20, sq->name, nlen);
+      memcpy(metabuf + 20 + nlen, sq->acc, alen);
+      memcpy(metabuf + 20 + nlen + alen, sq->desc, dlen);
+      if (!write_bytes(out, metabuf, 20 + mlen) ||
+          !write_bytes(out, sq->dsq + 1, (size_t)sq->n))
+        goto WRITE_ERROR;
+    }
 
     count++;
     residues += (uint64_t)sq->n;
@@ -113,6 +153,7 @@ main(int argc, char **argv)
 WRITE_ERROR:
   perror("fasta_to_bin8 write");
 DONE:
+  free(metabuf);
   if (out != NULL) fclose(out);
   if (sq != NULL) esl_sq_Destroy(sq);
   if (sf != NULL) esl_sqfile_Close(sf);
