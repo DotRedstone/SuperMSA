@@ -152,8 +152,18 @@ static uint32_t eslDSQDATA_MAGIC_V1SWAP = 0xb1d1d3c4; //  ... as above, but byte
  *            On <eslESYS> exceptions, some thread resources may
  *            not be fully freed, leading to some memory leakage.
  */
+/* New API allows a caller to account for Easel's unpacker threads.
+ * Existing esl_dsqdata_Open retains its historical default of four. */
 int
 esl_dsqdata_Open(ESL_ALPHABET **byp_abc, char *basename, int nconsumers, ESL_DSQDATA **ret_dd)
+{
+  return esl_dsqdata_OpenWithUnpackers(byp_abc, basename, nconsumers,
+                                      eslDSQDATA_UNPACKERS, ret_dd);
+}
+
+int
+esl_dsqdata_OpenWithUnpackers(ESL_ALPHABET **byp_abc, char *basename,
+                             int nconsumers, int n_unpackers, ESL_DSQDATA **ret_dd)
 {
   ESL_DSQDATA *dd        = NULL;
   int          bufsize   = 4096;
@@ -166,6 +176,9 @@ esl_dsqdata_Open(ESL_ALPHABET **byp_abc, char *basename, int nconsumers, ESL_DSQ
   int          u;
   int          status;
   
+  if (n_unpackers < 1 || n_unpackers > eslDSQDATA_UMAX || nconsumers < 1)
+    return eslEINVAL;
+
   ESL_DASSERT1(( nconsumers > 0   ));
   ESL_DASSERT1(( byp_abc  != NULL ));  // either *byp_abc == NULL or *byp_abc = the caller's expected alphabet.
   
@@ -192,7 +205,7 @@ esl_dsqdata_Open(ESL_ALPHABET **byp_abc, char *basename, int nconsumers, ESL_DSQ
   dd->pack5           = FALSE;  
 
   dd->nconsumers      = nconsumers;
-  dd->n_unpackers     = eslDSQDATA_UNPACKERS;      // we'll want to allow tuning this too
+  dd->n_unpackers     = n_unpackers;
   dd->errbuf[0]       = '\0';
 
   /* Open the four files.
