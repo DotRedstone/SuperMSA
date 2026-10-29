@@ -19,6 +19,7 @@ typedef struct {
 
   int              queueSize;           /* max number of items a queue will hold                   */
   int              pendingWorkers;      /* number of consumers waiting for work                    */
+  int              msa_signal_one;      /* opt-in: signal one consumer for one newly queued item  */
 } ESL_WORK_QUEUE;
 
 typedef struct{
