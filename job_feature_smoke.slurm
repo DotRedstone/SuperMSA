@@ -3,7 +3,7 @@
 #SBATCH -p cnall
 #SBATCH -N 1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH -t 00:50:00
 #SBATCH --no-requeue
 #SBATCH -o smoke.%j.out
