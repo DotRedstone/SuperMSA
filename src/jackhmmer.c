@@ -732,7 +732,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Each jackhmmer iteration must rescan the complete target database.
 	   * Rewind the binary cursor as well as the original FASTA cursor. */
 	  if (msa_bin8_reader.data != NULL) msa_bin8_rewind();
-	  else if (msa_dsq_reader.dd != NULL) {
+	  else if (msa_dsq_reader.basename != NULL) {
 	    status = msa_dsq_rewind(abc);
 	    if (status != eslOK) p7_Fail("DSQDATA rewind failed (%d)", status);
 	  } else esl_sqfile_Position(dbfp, 0);
@@ -767,7 +767,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sq_Reuse(qsq);
       esl_keyhash_Reuse(kh);
       if (msa_bin8_reader.data != NULL) msa_bin8_rewind();
-      else if (msa_dsq_reader.dd != NULL) {
+      else if (msa_dsq_reader.basename != NULL) {
         status = msa_dsq_rewind(abc);
         if (status != eslOK) p7_Fail("DSQDATA query rewind failed (%d)", status);
       } else esl_sqfile_Position(dbfp, 0);
@@ -1640,7 +1640,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   /* Main loop: */
   while ((sstatus = (msa_bin8_reader.data != NULL
                       ? msa_bin8_read(dbsq)
-                      : (msa_dsq_reader.dd != NULL
+                      : (msa_dsq_reader.basename != NULL
                          ? msa_dsq_read(dbsq) : esl_sqio_Read(dbfp, dbsq)))) == eslOK)
     {
       p7_pli_NewSeq(info->pli, dbsq);
@@ -1680,7 +1680,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
       block = (ESL_SQ_BLOCK *) newBlock;
       sstatus = (msa_bin8_reader.data != NULL
                  ? msa_bin8_readblock(block)
-                 : (msa_dsq_reader.dd != NULL
+                 : (msa_dsq_reader.basename != NULL
                     ? msa_dsq_readblock(block)
                     : esl_sqio_ReadBlock(dbfp, block, -1, -1, /*max_init_window=*/FALSE, FALSE)));
       if (sstatus == eslEOF)
