@@ -121,3 +121,99 @@ filtering, query input, or sequence processing order.
 Huffman is exactly reversible but its bit-by-bit branching may
 be slower than 5-bit fixed decoding. Compare **prologue + search**
 rather than only compressed file size.
+
+
+## Preferred plan when the old BIN8 Slurm job has not started
+
+If `squeue` reports `msa_bin8` as `PD`, cancel **only that one
+job ID** and run one same-node comparison across all four formats:
+
+```bash
+scancel 16167899
+```
+
+This job ID was observed pending on 2026-10-29; confirm `squeue`
+before executing, and never cancel the independent HPL array.
+
+**Important: the four-format benchmark replaces rather than combines
+the two older batch-specific scripts.** The original
+`run_new_formats_sweep.sh` remains in GitHub for earlier experiment
+history but should not be used for the new fair run.
+
+### Thread budget (fixed by the new run script)
+
+The earlier prototype assigned 8 search workers to each of six
+JackHMMER processes and allowed native DSQDATA to create 1 loader + 4
+unpackers per process. Including the main search-thread reader, this
+could reach approximately `6 * (8 + 1 + 1 + 4) = 84` JackHMMER
+threads; counting only workers+DSQDATA I/O gives `78`. This is
+unfair when a node allocation has only 56 logical CPUs.
+
+The experimental Easel API `esl_dsqdata_OpenWithUnpackers()` preserves
+the original `esl_dsqdata_Open()` default but permits 1..4 unpackers.
+The integration uses `MSA_DSQ_UNPACKERS=1` by default and reuses the
+same worker count when it reopens the reader each iteration.
+
+The preferred new configuration targets **48 threads** per phase:
+
+| Format | Query processes | Search workers / process | Main / process | Loader / process | Unpackers / process | Total |
+|---|---:|---:|---:|---:|---:|---:|
+| raw | 6 | 7 | 1 | 0 | 0 | 48 |
+| bin8 | 6 | 7 | 1 | 0 | 0 | 48 |
+| huff | 6 | 7 | 1 | 0 | 0 | 48 |
+| dsq | 6 | 5 | 1 | 1 | 1 | 48 |
+
+This leaves 8 CPUs in the 56-CPU Slurm allocation for xargs, shells,
+Python sampling, and operating-system activity. This is **equal
+overall thread budget**, not identical search-worker counts.
+DSQDATA makes a deliberate trade: 2 search workers for 2 background
+I/O/decoding threads. The `/proc/<pid>/task` sampler runs every
+second and records `*.threads.tsv` per trial, as well as peak
+processes and thread count in the overall summary. Sampling may
+underestimate short thread spikes; it is an observability check, not
+a hard-enforced cgroup guarantee.
+
+### One-node, eight-trial experimental batch
+
+After **`FOUR_WAY_BUILD_AND_SMOKE=PASS`** on `ibtest01`, use a
+fresh snapshot from this **updated** branch:
+
+```bash
+ROOT="$HOME/WORK/dot/experiments/supermsa/probes"
+BUILD="$ROOT/four-way-build-r01/source"
+RUN="$ROOT/four-formats-sweep-r01"
+test -s "$BUILD/four_way.binaries.sha256" || exit 1
+test -s "$BUILD/scripts/run_four_formats_sweep.sh" || exit 1
+test ! -e "$RUN" || exit 1
+mkdir "$RUN"
+cp -a "$BUILD" "$RUN/source"
+cp "$RUN/source/job_four_formats_sweep.slurm" "$RUN/job.slurm"
+cd "$RUN"
+bash -n job.slurm
+bash -n source/scripts/run_four_formats_sweep.sh
+sbatch job.slurm
+```
+
+Balanced order, with two complete trials per format:
+`raw, bin8, dsq, huff, huff, dsq, bin8, raw`.
+
+In all trials, prologue begins with the original FASTA; the full
+cost of digital conversion/compression is in the scored
+`prologue_s`. For correctness every query is compared to v1's
+original noncomment hit-table rows. No prior trial's prepared
+database or results are reused.
+
+Output:
+
+```bash
+cat "$RUN/summary.tsv"
+python3 "$RUN/source/scripts/report_interleaved_formats.py" "$RUN/summary.tsv"
+```
+
+End marker: `ALL_EIGHT_FOUR_FORMAT_TRIALS_COMPLETED=YES`.
+
+**Do not append these measurements to the old p6-t8 baseline as
+identical configuration**: raw, bin8, and huff use p6-t7 here;
+DSQDATA uses p6-t5 + native unpacking. The entire new experiment
+holds the total thread budget constant. Any promising candidate
+should also be measured on the 100-query official workload.
