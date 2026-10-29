@@ -21,7 +21,7 @@ RECORD_FIELDS = (
     "job_ids", "summary_path", "summary_state", "summary_rows",
     "provenance_path", "query_set_path", "raw_log_paths", "review_class",
 )
-TRIAL_FIELDS = ("record_path",) + SUMMARY_FIELDS
+TRIAL_BASE_FIELDS = ("record_path", "summary_path") + SUMMARY_FIELDS
 TASKS = {
     "e01-fasta-onepass": "DP-01",
     "e02-bin8-batched-io": "DP-03",
@@ -82,9 +82,13 @@ def summary(workspace, directory):
         return UNKNOWN, "NO_SUMMARY", UNKNOWN, []
     with path.open(newline="") as stream:
         reader = csv.DictReader(stream, delimiter="\t")
-        if not reader.fieldnames or not set(SUMMARY_FIELDS).issubset(reader.fieldnames):
+        if (not reader.fieldnames or not all(reader.fieldnames)
+                or len(set(reader.fieldnames)) != len(reader.fieldnames)
+                or "record_path" in reader.fieldnames or "summary_path" in reader.fieldnames):
             return relative(workspace, path), "UNPARSED", UNKNOWN, []
         rows = list(reader)
+        if any(None in row for row in rows):
+            return relative(workspace, path), "UNPARSED", UNKNOWN, []
     state = "HAS_TRIALS" if rows else "HEADER_ONLY"
     return relative(workspace, path), state, str(len(rows)), rows
 
@@ -123,9 +127,10 @@ def record(workspace, kind, directory, task_id, variant, run_id):
         "raw_log_paths": ",".join(relative(workspace, item) for item in logs) if logs else UNKNOWN,
         "review_class": "UNKNOWN",
     }
-    trials = [dict((field, row.get(field, "")) for field in SUMMARY_FIELDS) for row in rows]
+    trials = [dict(row) for row in rows]
     for trial in trials:
         trial["record_path"] = record_path
+        trial["summary_path"] = summary_path
     return result, trials
 
 
@@ -173,6 +178,11 @@ def write_tsv(path, fields, rows):
         writer.writerows(rows)
 
 
+def trial_fields(trials):
+    extras = sorted(set(key for row in trials for key in row) - set(TRIAL_BASE_FIELDS))
+    return TRIAL_BASE_FIELDS + tuple(extras)
+
+
 def create_catalog(workspace, snapshot):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", snapshot):
         raise ValueError("snapshot must contain only letters, digits, underscore or hyphen")
@@ -188,7 +198,7 @@ def create_catalog(workspace, snapshot):
     temporary = parent / ("." + snapshot + ".tmp-" + str(os.getpid()))
     temporary.mkdir()
     write_tsv(temporary / "records.tsv", RECORD_FIELDS, records)
-    write_tsv(temporary / "trials.tsv", TRIAL_FIELDS, trials)
+    write_tsv(temporary / "trials.tsv", trial_fields(trials), trials)
     manifest = {
         "schema_version": 1,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -201,7 +211,8 @@ def create_catalog(workspace, snapshot):
     (temporary / "README.md").write_text(
         "# SuperMSA 实验索引快照\n\n"
         "路径相对于 `WORK/dot`。`records.tsv` 列出原目录与已有证据；"
-        "`trials.tsv` 原样摘录现有 `summary.tsv` 的试验行。"
+        "`trials.tsv` 按原列名摘录现有 `summary.tsv` 的试验行；"
+        "不同来源没有的列留空，`summary_path` 指向原表。"
         "`HEADER_ONLY` 表示摘要只有表头，不能视为完成。"
         "`UNVERIFIED` 表示未从约定的原始文件核实；"
         "`review_class=UNKNOWN` 表示未判定能否迁移或清理。"
