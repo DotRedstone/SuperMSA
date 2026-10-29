@@ -80,3 +80,7 @@ squeue -u $USER                      # 查看状态：PD 排队 / R 运行
   **不得依据序列 ID 或 header 内容（包括 SCOP 分类码、`annotated_` 前缀）筛选、排序或剔除数据库序列，也不得利用这些信息构造命中表。** header 中的标注只供评分使用，组委会将审查提交代码，违者取消成绩。
 
 - 原版 HMMER 的完整文档见 [hmmer.org](http://hmmer.org)；本仓库删除了文档、测试套件与其余 18 个工具，如需参考请查阅上游仓库[EddyRivasLab/hmmer](https://github.com/EddyRivasLab/hmmer)。
+
+## 工程协作
+
+`main` 当前保留比赛基线；性能方案仍在独立分支，不能仅凭分支名判断已通过正式验收。修改前请阅读 [仓库约定](AGENTS.md)、[结构说明](docs/architecture/REPOSITORY.md)、[分支规范](docs/architecture/BRANCHING.md)和[工作流程](docs/architecture/WORKFLOW.md)。现有分支对应关系见[迁移索引](docs/architecture/MIGRATION.md)，技术任务与实验记录分别见[优化索引](docs/optimization/INDEX.md)和[实验索引](docs/experiments/INDEX.md)。
