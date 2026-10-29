@@ -37,6 +37,12 @@ def load(path, accept, groups):
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: report_four_formats.py bin8-summary.tsv new-summary.tsv")
+    old_queries = Path(sys.argv[1]).parent / "queries.selected"
+    new_queries = Path(sys.argv[2]).parent / "queries.selected"
+    old_ids = old_queries.read_text(encoding="utf-8").splitlines()
+    new_ids = new_queries.read_text(encoding="utf-8").splitlines()
+    if len(old_ids) != 12 or old_ids != new_ids or len(set(old_ids)) != 12:
+        raise ValueError("query IDs/order differ between the original and new benchmark runs")
     groups = defaultdict(list)
     load(sys.argv[1], {"raw", "bin8"}, groups)
     load(sys.argv[2], {"huff", "dsq"}, groups)
