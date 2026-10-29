@@ -118,8 +118,9 @@ int main(int argc,char **argv)
       if(!bits || SIZE_MAX - nbits < (size_t)bits) goto invalid;
       nbits+=(size_t)bits;
     }
+    if(nbits>SIZE_MAX-7) goto invalid;
     nbytes=(nbits+7)/8;
-    if(nbits>SIZE_MAX-7 || nbytes>UINT32_MAX) goto invalid;
+    if(nbytes>UINT32_MAX) goto invalid;
     packed=calloc(nbytes?nbytes:1,1);
     if(!packed) {perror("calloc");goto done;}
 
