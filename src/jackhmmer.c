@@ -25,6 +25,7 @@
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
+#include <sys/time.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
 #endif 
@@ -36,6 +37,12 @@
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
+  /* Per-iteration, per-worker opt-in Reader/Worker timing diagnostics. */
+  double            msa_wait_s;
+  double            msa_compute_s;
+  unsigned long long msa_blocks;
+  unsigned long long msa_sequences;
+  unsigned long long msa_residues;
 #endif
   P7_BG            *bg;
   P7_PIPELINE      *pli;
@@ -173,6 +180,24 @@ static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
+
+/* gettimeofday is available on the HPC platform; these are process
+ * wall-clock durations, not CPU cycles. Profiling is opt-in and the
+ * sampling calls are outside the inner per-residue search code. */
+static double
+msa_profile_now(void)
+{
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) != 0) return 0.0;
+  return (double) tv.tv_sec + 1e-6 * (double) tv.tv_usec;
+}
+
+static int
+msa_profile_enabled(void)
+{
+  const char *v = getenv("MSA_RW_PROFILE");
+  return v && strcmp(v, "1") == 0;
+}
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
@@ -1665,24 +1690,43 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   int  status  = eslOK;
   int  sstatus = eslOK;
   int  eofCount = 0;
+  int  profile = msa_profile_enabled();
+  int  worker_count = esl_threads_GetWorkerCount(obj);
+  int  w, i;
+  unsigned long long read_blocks = 0, read_sequences = 0, read_residues = 0;
+  double read_s = 0.0, reader_queue_s = 0.0, tick = 0.0, elapsed = 0.0;
+  static unsigned long long round_number = 0;
   ESL_SQ_BLOCK *block;
   void         *newBlock;
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
 
+  if (profile) tick = msa_profile_now();
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
+  if (profile) { elapsed = msa_profile_now() - tick; if (elapsed > 0) reader_queue_s += elapsed; }
   if (status != eslOK) p7_Fail("Work queue reader failed");
       
   /* Main loop: */
   while (sstatus == eslOK)
     {
       block = (ESL_SQ_BLOCK *) newBlock;
+      if (profile) tick = msa_profile_now();
       sstatus = (msa_bin8_reader.data != NULL
                  ? msa_bin8_readblock(block)
                  : (msa_dsq_reader.basename != NULL
                     ? msa_dsq_readblock(block)
                     : esl_sqio_ReadBlock(dbfp, block, -1, -1, /*max_init_window=*/FALSE, FALSE)));
+      if (profile) {
+        elapsed = msa_profile_now() - tick;
+        if (elapsed > 0) read_s += elapsed;
+        if (block->count > 0) {
+          ++read_blocks;
+          read_sequences += (unsigned long long) block->count;
+          for (i = 0; i < block->count; i++)
+            read_residues += (unsigned long long) block->list[i].n;
+        }
+      }
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
@@ -1691,18 +1735,36 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 
       if (sstatus == eslOK)
 	{
+          if (profile) tick = msa_profile_now();
 	  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
+          if (profile) { elapsed = msa_profile_now() - tick; if (elapsed > 0) reader_queue_s += elapsed; }
 	  if (status != eslOK) p7_Fail("Work queue reader failed");
 	}
     }
 
+  if (profile) tick = msa_profile_now();
   status = esl_workqueue_ReaderUpdate(queue, block, NULL);
+  if (profile) { elapsed = msa_profile_now() - tick; if (elapsed > 0) reader_queue_s += elapsed; }
   if (status != eslOK) p7_Fail("Work queue reader failed");
 
   if (sstatus == eslEOF)
     {
       /* wait for all the threads to complete */
       esl_threads_WaitForFinish(obj);
+      if (profile) {
+        ++round_number;
+        fprintf(stderr,
+                "MSA_RW_PROFILE round=%llu role=reader read_s=%.6f queue_s=%.6f blocks=%llu sequences=%llu residues=%llu\n",
+                round_number, read_s, reader_queue_s,
+                read_blocks, read_sequences, read_residues);
+        for (w = 0; w < worker_count; w++) {
+          WORKER_INFO *wi = (WORKER_INFO *) esl_threads_GetData(obj, w);
+          fprintf(stderr,
+                  "MSA_RW_PROFILE round=%llu role=worker id=%d wait_s=%.6f compute_s=%.6f blocks=%llu sequences=%llu residues=%llu\n",
+                  round_number, w, wi->msa_wait_s, wi->msa_compute_s,
+                  wi->msa_blocks, wi->msa_sequences, wi->msa_residues);
+        }
+      }
       esl_workqueue_Complete(queue);  
     }
 
@@ -1715,6 +1777,8 @@ pipeline_thread(void *arg)
   int i;
   int status;
   int workeridx;
+  int profile = msa_profile_enabled();
+  double tick = 0.0, elapsed = 0.0;
   WORKER_INFO   *info;
   ESL_THREADS   *obj;
 
@@ -1728,18 +1792,28 @@ pipeline_thread(void *arg)
   esl_threads_Started(obj, &workeridx);
 
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
+  info->msa_wait_s = info->msa_compute_s = 0.0;
+  info->msa_blocks = info->msa_sequences = info->msa_residues = 0;
 
+  if (profile) tick = msa_profile_now();
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
+  if (profile) { elapsed = msa_profile_now() - tick; if (elapsed > 0) info->msa_wait_s += elapsed; }
   if (status != eslOK) p7_Fail("Work queue worker failed");
 
   /* loop until all blocks have been processed */
   block = (ESL_SQ_BLOCK *) newBlock;
   while (block->count > 0)
     {
+      if (profile) {
+        tick = msa_profile_now();
+        ++info->msa_blocks;
+        info->msa_sequences += (unsigned long long) block->count;
+      }
       /* Main loop: */
       for (i = 0; i < block->count; ++i)
 	{
 	  ESL_SQ *dbsq = block->list + i;
+          if (profile) info->msa_residues += (unsigned long long) dbsq->n;
 
 	  p7_pli_NewSeq(info->pli, dbsq);
 	  p7_bg_SetLength(info->bg, dbsq->n);
@@ -1751,7 +1825,13 @@ pipeline_thread(void *arg)
 	  p7_pipeline_Reuse(info->pli);
 	}
 
+      if (profile) {
+        elapsed = msa_profile_now() - tick;
+        if (elapsed > 0) info->msa_compute_s += elapsed;
+        tick = msa_profile_now();
+      }
       status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
+      if (profile) { elapsed = msa_profile_now() - tick; if (elapsed > 0) info->msa_wait_s += elapsed; }
       if (status != eslOK) p7_Fail("Work queue worker failed");
 
       block = (ESL_SQ_BLOCK *) newBlock;
