@@ -30,9 +30,18 @@ FORCE=${FORCE:-0}
 DB=$DATA/database.fasta
 # The binary file is produced in this run's timed prologue, not before.
 # Keep the original FASTA argument for HMMER output metadata.
-if [ "${BIN8_PREPROCESS:-0}" = 1 ] && [ "${HUFF_PREPROCESS:-0}" = 1 ]; then
-    echo "ERROR: BIN8_PREPROCESS and HUFF_PREPROCESS cannot both be enabled" >&2
+if [ $((${BIN8_PREPROCESS:-0} + ${HUFF_PREPROCESS:-0} + ${DSQDATA_PREPROCESS:-0})) -gt 1 ]; then
+    echo "ERROR: BIN8, Huffman, and DSQDATA modes are mutually exclusive" >&2
     exit 1
+fi
+unset MSA_DSQDATA_DB
+if [ "${DSQDATA_PREPROCESS:-0}" = 1 ]; then
+    MSA_DSQDATA_DB="$OUT/prepared/database"
+    for file in "$MSA_DSQDATA_DB" "$MSA_DSQDATA_DB.dsqi" \
+                "$MSA_DSQDATA_DB.dsqm" "$MSA_DSQDATA_DB.dsqs"; do
+        [ -s "$file" ] || { echo "ERROR: DSQDATA artifact missing: $file" >&2; exit 1; }
+    done
+    export MSA_DSQDATA_DB
 fi
 if [ "${HUFF_PREPROCESS:-0}" = 1 ]; then
     MSA_BIN8_DB="$OUT/prepared/database.huf"
