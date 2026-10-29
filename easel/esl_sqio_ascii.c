@@ -2326,8 +2326,8 @@ seebuf(ESL_SQFILE *sqfp, int64_t maxn, int64_t *opt_nres, int64_t *opt_endpos)
  * digital residues during that same pass. It intentionally does NOT
  * replace seebuf() in ReadWindow/ReadInfo/ReadSequence or other formats.
  *
- * The buffer's remaining byte count is an upper bound on new residues,
- * so grow the ESL_SQ once per chunk rather than reallocating per byte.
+ * Grow the ESL_SQ geometrically only as validated residues arrive;
+ * the ASCII buffer may also contain unrelated short records.
  * No unvalidated symbol is ever appended. */
 static int
 fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq,
@@ -2342,7 +2342,9 @@ fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq,
   if (ascii->bpos > ascii->nc || ascii->bpos < 0) return eslEFORMAT;
   room = (int64_t)ascii->nc - ascii->bpos;
   if (sq->n > INT64_MAX - room) return eslEMEM;
-  if (esl_sq_GrowTo(sq, sq->n + room) != eslOK) return eslEMEM;
+  /* Do not allocate for the full ASCII buffer, which may contain
+   * many short sequences. Grow geometrically only when residues
+   * actually fill the existing ESL_SQ buffer. */
   lasteol = ascii->bpos - 1;
 
   for (bpos = ascii->bpos; bpos < ascii->nc; bpos++) {
@@ -2353,6 +2355,14 @@ fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq,
                ascii->linenumber, sym);
     x = sqfp->inmap[sym];
     if (x <= 127) {
+      if (sq->n >= sq->salloc - 2) {
+        int64_t need;
+        if (sq->n > INT64_MAX - 256) return eslEMEM;
+        need = sq->n + 256;
+        if (sq->salloc > 0 && sq->salloc <= (INT64_MAX-2)/2 &&
+            2*sq->salloc > need) need = 2*sq->salloc;
+        if (esl_sq_GrowTo(sq, need) != eslOK) return eslEMEM;
+      }
       sq->dsq[++sq->n] = sq->abc->inmap[sym];
       nres++;
     } else if (x == eslDSQ_EOL) {
