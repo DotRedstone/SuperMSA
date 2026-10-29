@@ -30,12 +30,20 @@ FORCE=${FORCE:-0}
 DB=$DATA/database.fasta
 # The binary file is produced in this run's timed prologue, not before.
 # Keep the original FASTA argument for HMMER output metadata.
-if [ "${BIN8_PREPROCESS:-0}" = 1 ]; then
+if [ "${BIN8_PREPROCESS:-0}" = 1 ] && [ "${HUFF_PREPROCESS:-0}" = 1 ]; then
+    echo "ERROR: BIN8_PREPROCESS and HUFF_PREPROCESS cannot both be enabled" >&2
+    exit 1
+fi
+if [ "${HUFF_PREPROCESS:-0}" = 1 ]; then
+    MSA_BIN8_DB="$OUT/prepared/database.huf"
+elif [ "${BIN8_PREPROCESS:-0}" = 1 ]; then
     MSA_BIN8_DB="$OUT/prepared/database.bin8"
-    [ -s "$MSA_BIN8_DB" ] || { echo "ERROR: requested bin8 database is missing: $MSA_BIN8_DB" >&2; exit 1; }
-    export MSA_BIN8_DB
 else
     unset MSA_BIN8_DB
+fi
+if [ -n "${MSA_BIN8_DB:-}" ]; then
+    [ -s "$MSA_BIN8_DB" ] || { echo "ERROR: prepared database is missing: $MSA_BIN8_DB" >&2; exit 1; }
+    export MSA_BIN8_DB
 fi
 TIMING=$OUT/timing.tsv
 
