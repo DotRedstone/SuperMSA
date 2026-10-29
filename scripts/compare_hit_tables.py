@@ -102,26 +102,38 @@ def validate_pair(reference: Path, candidate: Path, sid: str):
     # than doing O(n^2) pairwise inversions.
     if got_order != ref_order:
         original_position = {name: i for i, name in enumerate(ref_order)}
-        # Any candidate target that jumps ahead of a reference-earlier
-        # target must have a reference bit score within the tie margin.
-        # Descending minimum score among reference-earlier targets:
+        # Fenwick tree over reversed original ranks. Earlier candidates
+        # with original rank > current rank are inversions. Their
+        # minimum/maximum scores must be within tie tolerance.
+        n = len(ref_order)
+        min_tree = [math.inf] * (n + 1)
+        max_tree = [-math.inf] * (n + 1)
         moved = 0
         for i, target in enumerate(got_order):
-            if original_position[target] == i:
-                continue
-            moved += 1
-        # Reject rank inversions except between near-equal bit scores.
-        for i in range(len(got_order) - 1):
-            earlier = got_order[i]
-            for later in got_order[i+1:]:
-                if original_position[earlier] > original_position[later]:
-                    x = float(ref[earlier][5])
-                    y = float(ref[later][5])
-                    if abs(x-y) > SCORE_ABS_TOL + 1e-9:
-                        raise Difference(
-                            f"{sid}: non-tie rank inversion {earlier}({x}) "
-                            f"vs {later}({y})"
-                        )
+            rank = n - original_position[target]
+            score = float(ref[target][5])
+            idx = rank - 1
+            min_prev, max_prev = math.inf, -math.inf
+            while idx:
+                min_prev = min(min_prev, min_tree[idx])
+                max_prev = max(max_prev, max_tree[idx])
+                idx -= idx & -idx
+            if min_prev != math.inf and (
+                abs(min_prev-score) > SCORE_ABS_TOL + 1e-9 or
+                abs(max_prev-score) > SCORE_ABS_TOL + 1e-9
+            ):
+                raise Difference(
+                    f"{sid}: non-tie rank inversion involving "
+                    f"{target} (ref bit score {score}, prior inverted "
+                    f"score range {min_prev}..{max_prev})"
+                )
+            if original_position[target] != i:
+                moved += 1
+            idx = rank
+            while idx <= n:
+                min_tree[idx] = min(min_tree[idx], score)
+                max_tree[idx] = max(max_tree[idx], score)
+                idx += idx & -idx
         return len(ref), moved, checked_evalue_deltas
     return len(ref), 0, checked_evalue_deltas
 
