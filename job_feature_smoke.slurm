@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J msa_t1_smoke
+#SBATCH -J msa_e05_smoke
 #SBATCH -p cnall
 #SBATCH -N 1
 #SBATCH --ntasks=1
@@ -9,7 +9,8 @@
 #SBATCH -o smoke.%j.out
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR/source"
-echo "SMOKE_START feature=t1 job=$SLURM_JOB_ID host=$(hostname) time=$(date -Is)"
+echo "SMOKE_START feature=e05 job=$SLURM_JOB_ID host=$(hostname) time=$(date -Is)"
 bash scripts/build_bin8_candidate.sh
 bash tests/test_fasta_onepass.sh
-echo "SMOKE_SUCCESS feature=t1 marker=FASTA_ONEPASS_SMOKE=PASS"
+bash tests/test_fasta_direct_map.sh
+echo "SMOKE_SUCCESS feature=e05 marker=E05_FASTA_DIRECT_MAP_SMOKE=PASS"
