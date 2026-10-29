@@ -27,7 +27,13 @@ FILTERS=${FILTERS:---noali --F1 0.0005 --F2 5e-05 --F3 5e-07}
 WARMUP=${WARMUP:-5}
 PARALLEL=${PARALLEL:-1}  # concurrent queries (default 1 for baseline compatibility)
 FORCE=${FORCE:-0}
-DB=$DATA/database.fasta
+# Prepared input exists only when it was created by the timed prologue.
+# Do not silently fall back to the raw DB if preprocessing is requested.
+if [ "${FASTA_PREPROCESS:-0}" = 1 ]; then
+    DB=$OUT/prepared/database.fasta
+else
+    DB=$DATA/database.fasta
+fi
 TIMING=$OUT/timing.tsv
 
 die() { echo "ERROR: $*" >&2; exit 1; }
