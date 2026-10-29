@@ -520,7 +520,16 @@ int esl_workqueue_ReaderUpdate(ESL_WORK_QUEUE *queue, void *in, void **out)
 
       if (queue->pendingWorkers != 0)
 	{
-	  if (pthread_cond_broadcast (&queue->workerQueueCond) != 0) ESL_EXCEPTION(eslESYS, "broadcast failed");
+	  /* One newly published block needs only one sleeping worker.
+	   * Calling broadcast here can wake every waiting thread, making
+	   * them contend for one item (thundering herd). */
+	  if (queue->msa_signal_one) {
+	    if (pthread_cond_signal(&queue->workerQueueCond) != 0)
+	      ESL_EXCEPTION(eslESYS, "signal failed");
+	  } else {
+	    if (pthread_cond_broadcast(&queue->workerQueueCond) != 0)
+	      ESL_EXCEPTION(eslESYS, "broadcast failed");
+	  }
 	}
     }
 
