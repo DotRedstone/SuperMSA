@@ -62,7 +62,7 @@ compare_rows() {
 
 # Balanced order reduces systematic warm-cache / thermal ordering bias.
 modes=(huff dsq dsq huff)
-printf 'trial\tmode\tprologue_s\tsearch_s\ttotal_s\tqueries_run\tskipped\tquality\tidentical_v1\tencoded_bytes\n' > "$SUMMARY"
+printf 'trial\tmode\tprologue_s\tsearch_s\ttotal_s\tqueries_run\tskipped\tquality\tidentical_v1\tencoded_bytes\tworkers_per_query\tunpackers_per_query\tbudget_threads\tobserved_peak_threads\tobserved_peak_processes\n' > "$SUMMARY"
 for idx in "${!modes[@]}"; do
   trial=$(printf '%02d' "$((idx+1))")
   mode="${modes[$idx]}"
@@ -83,11 +83,35 @@ for idx in "${!modes[@]}"; do
   prep=$(awk '/^prologue time  = / {print $4}' "$RUN/$trial-$mode.prologue.log")
   [[ "$prep" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "bad prologue time"
 
-  DATA="$RUN/data" OUT="$out" BIN8_PREPROCESS="$flag" HUFF_PREPROCESS="$huff_flag" DSQDATA_PREPROCESS="$dsq_flag" \
-  JACKHMMER="$SRC/src/jackhmmer" CPU=8 PARALLEL=6 FORCE=1 WARMUP=1 \
-     bash "$SRC/run_queries.sh" "$RUN/data" "$out" > "$RUN/$trial-$mode.search.log" 2>&1 || {
-       tail -n 60 "$RUN/$trial-$mode.search.log" >&2; die "search failed"
-     }
+  # 56 allocated CPUs: 6 searches, at most 54 JackHMMER threads.
+  # Huffman: 8 workers + 1 main per search = 9
+  # DSQDATA: 6 workers + 1 main + 1 loader + 1 unpacker = 9
+  search_workers=8
+  unpackers=0
+  if [ "$mode" = dsq ]; then search_workers=6; unpackers=1; fi
+  budget=$((6 * (search_workers + 1 + (dsq_flag * (1 + unpackers)))))
+  [ "$budget" -le "${SLURM_CPUS_PER_TASK}" ] ||
+    die "estimated JackHMMER thread budget exceeds CPU allocation ($budget)"
+  echo "THREAD_BUDGET mode=$mode parallel=6 search_workers=$search_workers unpackers=$unpackers estimated=$budget allocated=${SLURM_CPUS_PER_TASK}"
+  monitor_log="$RUN/$trial-$mode.threads.tsv"
+  python3 "$SRC/scripts/monitor_search_threads.py" "$SRC/src/jackhmmer" 1 > "$monitor_log" &
+  monitor_pid=$!
+  if ! DATA="$RUN/data" OUT="$out" BIN8_PREPROCESS="$flag" HUFF_PREPROCESS="$huff_flag" DSQDATA_PREPROCESS="$dsq_flag" \
+    MSA_DSQ_UNPACKERS="$unpackers" JACKHMMER="$SRC/src/jackhmmer" CPU="$search_workers" \
+    PARALLEL=6 FORCE=1 WARMUP=1 \
+    bash "$SRC/run_queries.sh" "$RUN/data" "$out" > "$RUN/$trial-$mode.search.log" 2>&1; then
+    kill "$monitor_pid" 2>/dev/null || :
+    wait "$monitor_pid" 2>/dev/null || :
+    tail -n 60 "$RUN/$trial-$mode.search.log" >&2
+    die "search failed"
+  fi
+  kill "$monitor_pid" 2>/dev/null || :
+  wait "$monitor_pid" 2>/dev/null || :
+  peak_threads=$(awk -F '\t' 'NR>1 && $3>max {max=$3} END{print max+0}' "$monitor_log")
+  peak_procs=$(awk -F '\t' 'NR>1 && $2>max {max=$2} END{print max+0}' "$monitor_log")
+  echo "THREAD_OBSERVED mode=$mode peak_threads=$peak_threads peak_processes=$peak_procs"
+  [ "$peak_threads" -le "${SLURM_CPUS_PER_TASK}" ] ||
+    die "observed JackHMMER thread count exceeds allocated CPUs ($peak_threads)"
 
   read -r search ran skipped < <(awk -F '\t' 'NR==2 {print $1, $2, $3}' "$out/wall_time.tsv")
   [[ "$search" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "bad search time"
@@ -117,8 +141,9 @@ for idx in "${!modes[@]}"; do
       bytes=$((bytes + $(stat -c '%s' "$file")))
     done
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t12\t0\tPASS\tYES\t%s\n' \
-      "$trial" "$mode" "$prep" "$search" "$total" "$bytes" >> "$SUMMARY"
+  printf '%s\t%s\t%s\t%s\t%s\t12\t0\tPASS\tYES\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$trial" "$mode" "$prep" "$search" "$total" "$bytes" \
+      "$search_workers" "$unpackers" "$budget" "$peak_threads" "$peak_procs" >> "$SUMMARY"
   echo "PASS: mode=$mode prep=$prep search=$search total=$total hit rows identical"
 done
 echo "ALL_FOUR_NEW_FORMAT_TRIALS_COMPLETED=YES"
