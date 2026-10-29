@@ -93,7 +93,7 @@ prepare() {
     # Optional 8-bit digital DB. Output is constructed only inside the
     # measured prologue and is never reused across benchmark runs.
     if [ "${BIN8_PREPROCESS:-0}" = 1 ]; then
-        local converter="$REPO/scripts/fasta_to_bin8"
+        local converter="${BIN8_CONVERTER:-$REPO/scripts/fasta_to_bin8}"
         local prepared="$OUT/prepared/database.bin8"
         local tmp
 
