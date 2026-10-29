@@ -31,11 +31,11 @@ for workers in 0 2; do
     prefix="$tmp/cpu${workers}-n${iters}"
     ARGS=(--cpu "$workers" --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 \
           -N "$iters" -E 0.001 -o /dev/null)
-    env -u MSA_BIN8_DB -u MSA_DSQDATA_DB "$JACK" "${ARGS[@]}" \
+    timeout --signal=TERM 120s env -u MSA_BIN8_DB -u MSA_DSQDATA_DB "$JACK" "${ARGS[@]}" \
       --tblout "$prefix.raw.tbl" -A "$prefix.raw.sto" "$QUERY" "$DB"
-    env -u MSA_DSQDATA_DB MSA_BIN8_DB="$tmp/database.huf" "$JACK" "${ARGS[@]}" \
+    timeout --signal=TERM 120s env -u MSA_DSQDATA_DB MSA_BIN8_DB="$tmp/database.huf" "$JACK" "${ARGS[@]}" \
       --tblout "$prefix.huff.tbl" -A "$prefix.huff.sto" "$QUERY" "$DB"
-    env -u MSA_BIN8_DB MSA_DSQDATA_DB="$tmp/database" "$JACK" "${ARGS[@]}" \
+    timeout --signal=TERM 120s env -u MSA_BIN8_DB MSA_DSQDATA_DB="$tmp/database" MSA_DSQ_UNPACKERS=1 "$JACK" "${ARGS[@]}" \
       --tblout "$prefix.dsq.tbl" -A "$prefix.dsq.sto" "$QUERY" "$DB"
     awk 'NF && $0 !~ /^#/' "$prefix.raw.tbl" > "$prefix.raw.hits"
     test -s "$prefix.raw.hits" || {
