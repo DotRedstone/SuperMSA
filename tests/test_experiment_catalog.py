@@ -22,12 +22,14 @@ class CatalogTest(unittest.TestCase):
             (first / "job_ids.txt").write_text("smoke=16169715\nperf=16169716\n")
             (second / "summary.tsv").write_text(HEADER + "1\tonepass\ttuned\t2\t10\t12\t12\tPASS\ttrue\t8\t1\n")
             (second / "source-commit.txt").write_text("abcdef1234567890\n")
+            (workspace / "experiments/supermsa/probes/t1-abba-r02").symlink_to("experiments/e01-fasta-onepass/abba-r02")
             alternate = workspace / "experiments/supermsa/probes/ssv-band-sweep-r01"
             alternate.mkdir(parents=True)
             (alternate / "summary.tsv").write_text("trial\tband\tseconds\tmatching_original\n1\t14\t3.5\ttrue\n")
             baseline = workspace / "baselines/supermsa"
             baseline.mkdir(parents=True)
             (baseline / "stdout.16155687").write_text("original log\n")
+            (workspace / "experiments/supermsa/probes/source.tar").write_text("archive")
 
             output, records_count, trials_count = create_catalog(workspace, "snapshot")
             self.assertEqual((records_count, trials_count), (4, 2))
@@ -35,6 +37,10 @@ class CatalogTest(unittest.TestCase):
                 records = list(csv.DictReader(stream, delimiter="\t"))
             with (output / "trials.tsv").open() as stream:
                 trials = list(csv.DictReader(stream, delimiter="\t"))
+            with (output / "aliases.tsv").open() as stream:
+                aliases = list(csv.DictReader(stream, delimiter="\t"))
+            with (output / "supporting.tsv").open() as stream:
+                supporting = list(csv.DictReader(stream, delimiter="\t"))
             first_record = next(row for row in records if row["run_id"] == "abba-r01")
             second_record = next(row for row in records if row["run_id"] == "abba-r02")
             baseline_record = next(row for row in records if row["record_kind"] == "BASELINE_LOG")
@@ -47,6 +53,10 @@ class CatalogTest(unittest.TestCase):
             alternate_record = next(row for row in records if row["variant"] == "ssv-band-sweep-r01")
             self.assertEqual(alternate_record["summary_state"], "HAS_TRIALS")
             self.assertEqual(next(row for row in trials if row["record_path"] == alternate_record["record_path"])["seconds"], "3.5")
+            self.assertEqual(len(aliases), 1)
+            self.assertEqual(aliases[0]["canonical_path"], second_record["record_path"])
+            self.assertEqual((output / "by-task/DP-01/e01-fasta-onepass/abba-r02").resolve(), second)
+            self.assertEqual(next(row for row in supporting if row["file_path"].endswith("source.tar"))["role"], "SOURCE_ARCHIVE")
             self.assertEqual((first / "summary.tsv").read_text(), HEADER)
             with self.assertRaises(FileExistsError):
                 create_catalog(workspace, "snapshot")
