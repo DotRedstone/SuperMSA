@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <string.h>
+#include <errno.h>
 #include "esl_dsqdata.h"
 
 typedef struct {
@@ -20,6 +21,7 @@ typedef struct {
   char *basename;
   int offset;
   int64_t next_index;
+  int n_unpackers;
 } MSA_DSQ_READER;
 
 static MSA_DSQ_READER msa_dsq_reader = {0};
@@ -30,13 +32,24 @@ msa_dsq_open(const char *basename, ESL_ALPHABET *abc)
   ESL_ALPHABET *expected = abc;
   size_t len;
   int status;
+  char *endptr = NULL;
+  const char *budget = getenv("MSA_DSQ_UNPACKERS");
+  long workers = 1; /* one loader plus one unpacker, by default */
+  if (budget && *budget) {
+    errno = 0;
+    workers = strtol(budget, &endptr, 10);
+    if (errno || !endptr || *endptr != '\0' ||
+        workers < 1 || workers > eslDSQDATA_UMAX) return eslEINVAL;
+  }
   if (!basename || !*basename || !abc || msa_dsq_reader.dd) return eslEINVAL;
+  msa_dsq_reader.n_unpackers = (int)workers;
   len = strlen(basename);
   msa_dsq_reader.basename = malloc(len+1);
   if (!msa_dsq_reader.basename) return eslEMEM;
   memcpy(msa_dsq_reader.basename, basename, len+1);
-  status = esl_dsqdata_Open(&expected, msa_dsq_reader.basename, 1,
-                             &msa_dsq_reader.dd);
+  status = esl_dsqdata_OpenWithUnpackers(
+      &expected, msa_dsq_reader.basename, 1, msa_dsq_reader.n_unpackers,
+      &msa_dsq_reader.dd);
   if (status != eslOK) {
     free(msa_dsq_reader.basename);
     msa_dsq_reader.basename = NULL;
@@ -66,6 +79,7 @@ msa_dsq_close(void)
   msa_dsq_reader.basename=NULL;
   msa_dsq_reader.offset=0;
   msa_dsq_reader.next_index=0;
+  msa_dsq_reader.n_unpackers=0;
   return status;
 }
 
@@ -85,8 +99,9 @@ msa_dsq_rewind(ESL_ALPHABET *abc)
   status=esl_dsqdata_Close(msa_dsq_reader.dd);
   msa_dsq_reader.dd=NULL;
   if (status!=eslOK) return status;
-  status=esl_dsqdata_Open(&expected, msa_dsq_reader.basename, 1,
-                             &msa_dsq_reader.dd);
+  status=esl_dsqdata_OpenWithUnpackers(
+      &expected, msa_dsq_reader.basename, 1, msa_dsq_reader.n_unpackers,
+      &msa_dsq_reader.dd);
   if (status!=eslOK) return status;
   msa_dsq_reader.offset=0;
   msa_dsq_reader.next_index=0;
