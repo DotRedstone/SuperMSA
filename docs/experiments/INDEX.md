@@ -8,6 +8,15 @@
 
 原始日志、分析报告、可重现脚本和正式评分输出分开保存。大型数据、二进制与运行日志不提交 Git；仓库仅保存小型索引、可复现脚本和适合公开的汇总。ABBA 比较记录顺序、重复次数、每轮原始时间和配对差值；一次更快不能证明方案有效。正式计时采用同一作业的 `prologue time + search time`，预处理不能提前转移。
 
+可用 [`tools/experiments/catalog.py`](../../tools/experiments/catalog.py) 为现有工作区生成只读索引快照：
+
+```bash
+python3 tools/experiments/catalog.py --workspace "$HOME/WORK/dot" --dry-run
+python3 tools/experiments/catalog.py --workspace "$HOME/WORK/dot"
+```
+
+脚本只在 `experiments/supermsa/catalog/<UTC 时间>/` 写入新快照，输出 `records.tsv`、`trials.tsv` 和说明，不移动或修改原实验。重复快照名会报错。`summary.tsv` 仅有表头时记为 `HEADER_ONLY`，不算完成；未找到证据的字段记为 `UNVERIFIED`，历史记录的迁移分类保持 `UNKNOWN`。新实验的 `run.json` 可从 [`run.template.json`](../../tools/experiments/run.template.json) 开始填写，完成后须将未核实字段明确标为 `UNVERIFIED`。
+
 ## 待核对的历史来源
 
 | 类别 | Git 来源 | 当前索引状态 |
