@@ -27,7 +27,8 @@
 | 归档 | tag `archive/<task>/<variant>` | `archive/dp-02/v01-rewrap` |
 
 - 方案分支**从 main 开**。如果确实依赖另一个未合并的方案，就从那个方案的分支开，并在登记表的"依赖"列写明。依赖的方案被拒绝时，本方案也要重新评估。
-- 结束时：accepted → `git merge --no-ff` 进 main，打 `vN`，删除分支；rejected / inconclusive → 打 `archive/...` tag，删除分支。
+- 结束时：accepted → `git merge --no-ff` 进 main，打 `vN`，删除分支；rejected / inconclusive / parked → 打 `archive/...` tag，删除分支。
+  `parked` 表示没有测量就暂缓（写明理由），以后可以从 archive tag 恢复。
   远端只保留 main 和**进行中**的方案分支。
 - commit：`<type>(<scope>): <描述>`。type ∈ `feat perf fix test docs build refactor chore`，scope 优先写领域（`dp ck qs sa ev`）。描述用中文或英文都可以。
 
