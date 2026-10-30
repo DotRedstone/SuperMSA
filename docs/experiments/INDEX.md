@@ -15,7 +15,7 @@ python3 tools/experiments/catalog.py --workspace "$HOME/WORK/dot" --dry-run
 python3 tools/experiments/catalog.py --workspace "$HOME/WORK/dot"
 ```
 
-脚本只在 `experiments/supermsa/catalog/<UTC 时间>/` 写入新快照，输出 `records.tsv`、`trials.tsv`、`aliases.tsv`、`supporting.tsv` 和 `by-task/` 分类链接视图，不移动或修改原实验。迁移前识别原目录；迁移后识别领域/任务/方案/轮次目录，兼容链接单列到 `aliases.tsv`，不重复计算为运行。`supporting.tsv` 收录源码包、脚本、分析文件和日志，不推断它们与具体运行的对应关系。`by-task/` 中每个链接指向规范目录；任务号只用于分类，不代表源码来源、正确性或性能结论已经核实。
+脚本只在 `experiments/supermsa/catalog/<UTC 时间>/` 写入新快照，输出 `records.tsv`、`trials.tsv`、`aliases.tsv`、`supporting.tsv` 和 `by-task/` 分类链接视图，不移动或修改原实验。迁移前识别原目录；迁移后识别领域/任务/方案/轮次目录，兼容链接单列到 `aliases.tsv`，不重复计算为运行。`supporting.tsv` 收录源码包、脚本、分析文件、日志及迁移清单，不推断它们与具体运行的对应关系。`by-task/` 中每个链接指向规范目录；任务号只用于分类，不代表源码来源、正确性或性能结论已经核实。
 
 `trials.tsv` 保留各类摘要的原列名；某来源不存在的列留空，`summary_path` 指向原表。重复快照名会报错。`summary.tsv` 仅有表头时记为 `HEADER_ONLY`，不算完成；未找到证据的字段记为 `UNVERIFIED`，历史记录的迁移分类保持 `UNKNOWN`。新实验的 `run.json` 可从 [`run.template.json`](../../tools/experiments/run.template.json) 开始填写，完成后须将未核实字段明确标为 `UNVERIFIED`。
 

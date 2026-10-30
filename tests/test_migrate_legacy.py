@@ -36,6 +36,7 @@ class LegacyMigrationTest(unittest.TestCase):
             catalog, count, _ = create_catalog(workspace, "synthetic")
             self.assertEqual(count, 24)
             self.assertTrue((catalog / "by-task/DP-01/V01-onepass/abba-r01").exists())
+            self.assertIn("manifest.json", (catalog / "supporting.tsv").read_text())
             for row in rows:
                 old, new = workspace / row["old"], workspace / row["new"]
                 self.assertTrue(old.is_symlink())

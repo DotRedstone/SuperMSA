@@ -248,6 +248,9 @@ def collect_supporting(workspace):
     assets = root / "assets"
     if assets.is_dir():
         directories.extend(path for path in assets.iterdir() if path.is_dir())
+    migrations = root / "migrations"
+    if migrations.is_dir():
+        directories.extend(path for path in migrations.iterdir() if path.is_dir())
     files = sorted(path for directory in directories if directory.is_dir()
                    for path in directory.iterdir() if path.is_file() and not path.is_symlink())
     result = []
