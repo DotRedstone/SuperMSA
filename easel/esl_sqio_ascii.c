@@ -63,7 +63,7 @@ static int  loadmem  (ESL_SQFILE *sqfp);
 static int  loadbuf  (ESL_SQFILE *sqfp);
 static int  nextchar (ESL_SQFILE *sqfp, char *ret_c);
 static int  seebuf   (ESL_SQFILE *sqfp, int64_t maxn, int64_t *opt_nres, int64_t *opt_endpos);
-static int  fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq, int64_t *opt_nres, int64_t *opt_endpos);
+static int  fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq, int64_t *opt_nres, int64_t *opt_endpos, int direct_map);
 static void addbuf   (ESL_SQFILE *sqfp, ESL_SQ *sq, int64_t nres);
 static void skipbuf  (ESL_SQFILE *sqfp, int64_t nskip);
 static int  read_nres(ESL_SQFILE *sqfp, ESL_SQ *sq, int64_t nskip, int64_t nres, int64_t *opt_actual_nres);
@@ -792,9 +792,11 @@ sqascii_Read(ESL_SQFILE *sqfp, ESL_SQ *sq)
     const char *opt = getenv("MSA_FASTA_ONEPASS");
     int fused = (opt && strcmp(opt, "1") == 0 &&
                  sqfp->format == eslSQFILE_FASTA && sq->dsq != NULL);
+    const char *mapopt = getenv("MSA_FASTA_DIRECT_MAP");
+    int direct_map = (fused && mapopt && strcmp(mapopt, "1") == 0);
     do {
       if (fused) {
-        status = fasta_readbuf_onepass(sqfp, sq, &n, &epos);
+        status = fasta_readbuf_onepass(sqfp, sq, &n, &epos, direct_map);
         if (status == eslEFORMAT || status == eslEMEM || status == eslEINVAL)
           return status;
       } else {
@@ -2331,7 +2333,8 @@ seebuf(ESL_SQFILE *sqfp, int64_t maxn, int64_t *opt_nres, int64_t *opt_endpos)
  * No unvalidated symbol is ever appended. */
 static int
 fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq,
-                      int64_t *opt_nres, int64_t *opt_endpos)
+                      int64_t *opt_nres, int64_t *opt_endpos,
+                      int direct_map)
 {
   ESL_SQASCII_DATA *ascii = &sqfp->data.ascii;
   int bpos, sym, lasteol, status = eslOK;
@@ -2363,7 +2366,11 @@ fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq,
             2*sq->salloc > need) need = 2*sq->salloc;
         if (esl_sq_GrowTo(sq, need) != eslOK) return eslEMEM;
       }
-      sq->dsq[++sq->n] = sq->abc->inmap[sym];
+      /* In digital FASTA mode, sqfp->inmap comes from the alphabet
+       * mapping except '*' is overridden to its ASCII literal. Reuse x
+       * for ordinary residues, but preserve the original mapping for
+       * '*' and all residues when the experiment knob is disabled. */
+      sq->dsq[++sq->n] = (direct_map && sym != '*') ? x : sq->abc->inmap[sym];
       nres++;
     } else if (x == eslDSQ_EOL) {
       if (ascii->curbpl != -1) ascii->curbpl += bpos - lasteol;

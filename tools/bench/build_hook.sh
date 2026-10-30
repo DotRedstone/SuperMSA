@@ -3,3 +3,4 @@
 set -euo pipefail
 gcc -O2 -std=c99 -Wall -I easel -o tests/fasta_dump tests/fasta_dump.c -L easel -leasel -pthread -lm
 bash tests/test_fasta_onepass.sh
+bash tests/test_fasta_direct_map.sh
