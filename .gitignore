@@ -53,3 +53,6 @@ results/
 stdout.*
 stderr.*
 __pycache__/
+
+# 测试辅助程序
+tests/fasta_dump

@@ -63,6 +63,7 @@ static int  loadmem  (ESL_SQFILE *sqfp);
 static int  loadbuf  (ESL_SQFILE *sqfp);
 static int  nextchar (ESL_SQFILE *sqfp, char *ret_c);
 static int  seebuf   (ESL_SQFILE *sqfp, int64_t maxn, int64_t *opt_nres, int64_t *opt_endpos);
+static int  fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq, int64_t *opt_nres, int64_t *opt_endpos);
 static void addbuf   (ESL_SQFILE *sqfp, ESL_SQ *sq, int64_t nres);
 static void skipbuf  (ESL_SQFILE *sqfp, int64_t nskip);
 static int  read_nres(ESL_SQFILE *sqfp, ESL_SQ *sq, int64_t nskip, int64_t nres, int64_t *opt_actual_nres);
@@ -785,14 +786,28 @@ sqascii_Read(ESL_SQFILE *sqfp, ESL_SQ *sq)
   if (ascii->nc == 0) return eslEOF;
   if ((status = ascii->parse_header(sqfp, sq)) != eslOK) return status; /* EMEM, EOF, EFORMAT */
 
-  do {
-    if ((status = seebuf(sqfp, -1, &n, &epos)) == eslEFORMAT) return status;
-    if (esl_sq_GrowTo(sq, sq->n + n) != eslOK) return eslEMEM;
-    addbuf(sqfp, sq, n);
+  /* Read() and ReadBlock() use this path. Default to upstream
+   * behavior; opt in only for digital, ordinary FASTA target reads. */
+  {
+    const char *opt = getenv("MSA_FASTA_ONEPASS");
+    int fused = (opt && strcmp(opt, "1") == 0 &&
+                 sqfp->format == eslSQFILE_FASTA && sq->dsq != NULL);
+    do {
+      if (fused) {
+        status = fasta_readbuf_onepass(sqfp, sq, &n, &epos);
+        if (status == eslEFORMAT || status == eslEMEM || status == eslEINVAL)
+          return status;
+      } else {
+        status = seebuf(sqfp, -1, &n, &epos);
+        if (status == eslEFORMAT) return status;
+        if (esl_sq_GrowTo(sq, sq->n + n) != eslOK) return eslEMEM;
+        addbuf(sqfp, sq, n);
+      }
     ascii->L   += n;
     sq->eoff   = ascii->boff + epos - 1;
     if (status == eslEOD)     break;
-  } while ((status = loadbuf(sqfp)) == eslOK);
+    } while ((status = loadbuf(sqfp)) == eslOK);
+  }
     
   if      (status == eslEOF)
     {
@@ -2302,6 +2317,89 @@ seebuf(ESL_SQFILE *sqfp, int64_t maxn, int64_t *opt_nres, int64_t *opt_endpos)
   if (ascii->curbpl != -1) ascii->curbpl += bpos - lasteol - 1;
   if (ascii->currpl != -1) ascii->currpl += nres - nres2;
   if (opt_nres   != NULL) *opt_nres   = nres;
+  if (opt_endpos != NULL) *opt_endpos = bpos;
+  return status;
+}
+
+/* Opt-in fused FASTA digital scan for complete sequence reads only.
+ * Retains all seebuf() error, EOL and SSI bookkeeping while emitting
+ * digital residues during that same pass. It intentionally does NOT
+ * replace seebuf() in ReadWindow/ReadInfo/ReadSequence or other formats.
+ *
+ * Grow the ESL_SQ geometrically only as validated residues arrive;
+ * the ASCII buffer may also contain unrelated short records.
+ * No unvalidated symbol is ever appended. */
+static int
+fasta_readbuf_onepass(ESL_SQFILE *sqfp, ESL_SQ *sq,
+                      int64_t *opt_nres, int64_t *opt_endpos)
+{
+  ESL_SQASCII_DATA *ascii = &sqfp->data.ascii;
+  int bpos, sym, lasteol, status = eslOK;
+  int64_t nres = 0, nres2 = 0, room;
+  ESL_DSQ x;
+
+  if (sq->dsq == NULL || sq->abc == NULL) return eslEINVAL;
+  if (ascii->bpos > ascii->nc || ascii->bpos < 0) return eslEFORMAT;
+  room = (int64_t)ascii->nc - ascii->bpos;
+  if (sq->n > INT64_MAX - room) return eslEMEM;
+  /* Do not allocate for the full ASCII buffer, which may contain
+   * many short sequences. Grow geometrically only when residues
+   * actually fill the existing ESL_SQ buffer. */
+  lasteol = ascii->bpos - 1;
+
+  for (bpos = ascii->bpos; bpos < ascii->nc; bpos++) {
+    sym = (unsigned char) ascii->buf[bpos];
+    if (sym > 127)
+      ESL_FAIL(eslEFORMAT, ascii->errbuf,
+               "Line %" PRId64 ": non-ASCII character %c in sequence",
+               ascii->linenumber, sym);
+    x = sqfp->inmap[sym];
+    if (x <= 127) {
+      if (sq->n >= sq->salloc - 2) {
+        int64_t need;
+        if (sq->n > INT64_MAX - 256) return eslEMEM;
+        need = sq->n + 256;
+        if (sq->salloc > 0 && sq->salloc <= (INT64_MAX-2)/2 &&
+            2*sq->salloc > need) need = 2*sq->salloc;
+        if (esl_sq_GrowTo(sq, need) != eslOK) return eslEMEM;
+      }
+      sq->dsq[++sq->n] = sq->abc->inmap[sym];
+      nres++;
+    } else if (x == eslDSQ_EOL) {
+      if (ascii->curbpl != -1) ascii->curbpl += bpos - lasteol;
+      if (ascii->currpl != -1) ascii->currpl += nres - nres2;
+      nres2 += nres - nres2;
+      if (ascii->rpl != 0 && ascii->prvrpl != -1) {
+        if      (ascii->rpl == -1) ascii->rpl = ascii->prvrpl;
+        else if (ascii->prvrpl != ascii->rpl) ascii->rpl = 0;
+        else if (ascii->currpl > ascii->rpl) ascii->rpl = 0;
+      }
+      if (ascii->bpl != 0 && ascii->prvbpl != -1) {
+        if      (ascii->bpl == -1) ascii->bpl = ascii->prvbpl;
+        else if (ascii->prvbpl != ascii->bpl) ascii->bpl = 0;
+        else if (ascii->curbpl > ascii->bpl) ascii->bpl = 0;
+      }
+      ascii->prvbpl = ascii->curbpl;
+      ascii->prvrpl = ascii->currpl;
+      ascii->curbpl = 0;
+      ascii->currpl = 0;
+      lasteol = bpos;
+      if (ascii->linenumber != -1) ascii->linenumber++;
+    } else if (x == eslDSQ_ILLEGAL) {
+      ESL_FAIL(eslEFORMAT, ascii->errbuf,
+               "Line %" PRId64 ": illegal character %c",
+               ascii->linenumber, sym);
+    } else if (x == eslDSQ_EOD) {
+      status = eslEOD;
+      break;
+    } else if (x != eslDSQ_IGNORED) {
+      ESL_FAIL(eslEFORMAT, ascii->errbuf, "inmap corruption?");
+    }
+  }
+  if (ascii->curbpl != -1) ascii->curbpl += bpos - lasteol - 1;
+  if (ascii->currpl != -1) ascii->currpl += nres - nres2;
+  ascii->bpos = bpos;
+  if (opt_nres != NULL) *opt_nres = nres;
   if (opt_endpos != NULL) *opt_endpos = bpos;
   return status;
 }
