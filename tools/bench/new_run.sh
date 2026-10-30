@@ -14,6 +14,11 @@ WS=${MSA_WS:-$HOME/WORK/dot}
 REPO=${MSA_REPO:-$WS/SuperMSA}
 EXP=$WS/experiments/supermsa
 die() { echo "ERROR: $*" >&2; exit 1; }
+# 集群上的 git 是 1.8.3，不支持 git -C；分支名找不到时自动尝试 origin/<分支名>。
+g() { (cd "$REPO" && git "$@"); }
+resolve_sha() {
+    g rev-parse -q --verify "$1^{commit}" 2>/dev/null || g rev-parse -q --verify "origin/$1^{commit}" 2>/dev/null
+}
 
 task= variant= base= tuned= base_env= tuned_env= queries=q12 order=ABBA
 cpu=8 parallel=6 warmup=1 time_limit= dry=0
@@ -50,7 +55,7 @@ qfile=$REPO/tools/bench/querysets/$queries.txt
 builds=$EXP/builds
 resolve() {
     local sha
-    sha=$(git -C "$REPO" rev-parse --verify "$1^{commit}") || die "无法解析 $1"
+    sha=$(resolve_sha "$1") || die "无法解析 $1（先在 $REPO 执行 git pull）"
     [ -f "$builds/${sha:0:12}/BINARIES.sha256" ] || die "$1 (${sha:0:12}) 尚未编译：在 test01 上执行 tools/bench/build.sh $1"
     echo "$sha"
 }
@@ -67,14 +72,14 @@ n=1
 while compgen -G "$parent/r$(printf %02d $n)-*" > /dev/null; do n=$((n + 1)); done
 run=$parent/r$(printf %02d $n)-$queries
 
-harness_sha=$(git -C "$REPO" rev-parse HEAD)
+harness_sha=$(g rev-parse HEAD)
 echo "run=$run"
 echo "base=$base ${base_sha:0:12} env='$base_env'"
 echo "tuned=$tuned ${tuned_sha:0:12} env='$tuned_env'"
 echo "order=$order queries=$queries($nq) cpu=$cpu parallel=$parallel warmup=$warmup time=$time_limit"
 [ "$dry" = 0 ] || exit 0
 
-[ -z "$(git -C "$REPO" status --porcelain)" ] || die "$REPO 有未提交改动，集群上的仓库只能通过 push 更新"
+[ -z "$(g status --porcelain)" ] || die "$REPO 有未提交改动，集群上的仓库只能通过 push 更新"
 mkdir -p "$run"
 cp "$REPO/tools/bench/abba.sh" "$REPO/tools/bench/abba.slurm" \
    "$REPO/tools/bench/compare_hit_tables.py" "$REPO/tools/bench/summarize.py" "$run/"

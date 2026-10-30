@@ -52,7 +52,7 @@
 ```
 ~/WORK/dot/
   preliminary/                         比赛数据，只读
-  SuperMSA/                            仓库，只通过 git push 更新，不在这里改代码，也不在这里编译
+  SuperMSA/                            仓库，只通过 git pull --ff-only 更新，不在这里改代码，也不在这里编译
   experiments/supermsa/
     builds/<sha12>/                    按 commit 编译的产物，只读；BINARIES.sha256 存在即表示编译完整
     <dp|ck|qs|sa|ev>/<TASK>/<VARIANT>/<RUN>/
@@ -64,14 +64,20 @@
 
 ### 一次实验的完整流程
 
+集群能访问 GitHub，所以同步就是：本地 push，集群 pull。集群上的 git 是 1.8.3，脚本里没有使用新版本的语法。
+`build.sh` 和 `new_run.sh` 收到分支名时，会自动解析成 `origin/<分支名>`。
+
 ```bash
-# 本地：推送代码（集群上的仓库设置了 receive.denyCurrentBranch=updateInstead）
-git push hpc main perf/dp-02/v02-bin8
+# 本地
+git push origin main perf/dp-02/v02-bin8
+
+# 登录节点：更新仓库（只允许快进，集群上永远不改代码）
+cd ~/WORK/dot/SuperMSA && git pull --ff-only
 
 # test01：编译（同一个 commit 只编译一次）
 ssh test01
 module load compilers/gcc/v12.2.0
-~/WORK/dot/SuperMSA/tools/bench/build.sh perf/dp-02/v02-bin8
+~/WORK/dot/SuperMSA/tools/bench/build.sh main perf/dp-02/v02-bin8
 exit
 
 # 登录节点：建运行目录并提交作业（先加 --dry-run 看一眼）
