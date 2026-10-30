@@ -52,7 +52,7 @@
 ```
 ~/WORK/dot/
   preliminary/                         比赛数据，只读
-  SuperMSA/                            仓库，只通过 git pull --ff-only 更新，不在这里改代码，也不在这里编译
+  SuperMSA/                            仓库，只通过本地的 tools/bench/sync_hpc.sh 更新，不在这里改代码，也不在这里编译
   experiments/supermsa/
     builds/<sha12>/                    按 commit 编译的产物，只读；BINARIES.sha256 存在即表示编译完整
     <dp|ck|qs|sa|ev>/<TASK>/<VARIANT>/<RUN>/
@@ -64,15 +64,14 @@
 
 ### 一次实验的完整流程
 
-集群能访问 GitHub，所以同步就是：本地 push，集群 pull。集群上的 git 是 1.8.3，脚本里没有使用新版本的语法。
+集群访问 GitHub 不稳定，所以由本地通过 ssh 推送：`tools/bench/sync_hpc.sh` 会把 **GitHub 上的状态**（`origin/*` 和 tag）
+推到集群仓库，并把集群上的 main 快进。集群上永远不改代码。集群的 git 是 1.8.3；
 `build.sh` 和 `new_run.sh` 收到分支名时，会自动解析成 `origin/<分支名>`。
 
 ```bash
 # 本地
 git push origin main perf/dp-02/v02-bin8
-
-# 登录节点：更新仓库（只允许快进，集群上永远不改代码）
-cd ~/WORK/dot/SuperMSA && git pull --ff-only
+tools/bench/sync_hpc.sh
 
 # test01：编译（同一个 commit 只编译一次）
 ssh test01
