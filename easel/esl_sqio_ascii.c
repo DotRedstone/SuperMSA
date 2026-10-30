@@ -3293,6 +3293,7 @@ esl_sqascii_Parse(char *buf, int size, ESL_SQ *sq, int format)
   ascii->do_gzip      = FALSE;
   ascii->do_stdin     = FALSE;
   ascii->do_buffer    = TRUE;
+  ascii->fasta_read_chunk = eslREADBUFSIZE; /* in-memory Parse has no FILE */
 
   ascii->mem          = buf;
   ascii->allocm       = 0;
