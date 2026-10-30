@@ -4,7 +4,7 @@
 
 ## 分支与提交
 
-- `main` 是稳定入口。每项修改从 `main` 创建短期分支；确需继承其他实验分支时，在 PR 中写明起点与依赖。旧公开分支不改写、不强推、不删除；历史映射见 [迁移说明](docs/architecture/MIGRATION.md)。
+- `main` 是稳定入口。代码分支使用 `<类型>/<小写任务号>/<功能名>`，例如 `perf/dp-01/direct-map`；跨任务文档和仓库整理使用 `docs/<名称>` 或 `refactor/<名称>`。每项修改通常从 `main` 创建短期分支；确需继承其他实验分支时，在 PR 中写明起点与依赖。历史分支改名和旧引用处理见 [迁移说明](docs/architecture/MIGRATION.md)。
 - 一个提交只承担一个目的。行为变更、目录迁移和纯文档整理分别提交。提交信息使用带非空 scope 的 Conventional Commits，英文类型、中文描述，例如 `fix(reader): 修复空输入处理`。
 - PR 写明变更范围、验证命令及结果、回退方式。未经正确性验证的性能候选不得直接进入 `main`。分支及集成流程见 [分支规范](docs/architecture/BRANCHING.md)和[工作流程](docs/architecture/WORKFLOW.md)。
 
