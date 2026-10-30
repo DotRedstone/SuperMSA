@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Lightweight scheduler regression test with a fake jackhmmer.
 # Run on test01 (NOT a login node): bash tests/test_query_scheduler.sh
 set -euo pipefail
@@ -19,7 +19,7 @@ pathlib.Path(out, "scoring_was_called").write_text("ok\n")
 PY
 
 cat > "$tmp/fake-jackhmmer" <<'SH'
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 tbl=""; sto=""; prev=""; last=""
 while [ "$#" -gt 0 ]; do

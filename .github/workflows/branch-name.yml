@@ -13,10 +13,10 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
         shell: bash
         run: |
-          if [[ "$HEAD_REF" =~ ^(feat|fix|perf|probe|bench|archive)/(dp|ck|qs|sa|ev)-[0-9]{2}/[a-z0-9]+(-[a-z0-9]+)*$ ]] ||
-             [[ "$HEAD_REF" =~ ^(docs|refactor)/[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+          if [[ "$HEAD_REF" =~ ^(feat|fix|perf|probe)/(dp|ck|qs|sa|ev)-[0-9]{2}/v[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$ ]] ||
+             [[ "$HEAD_REF" =~ ^(docs|refactor|chore|fix|test)/[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
             printf 'Valid branch: %s\n' "$HEAD_REF"
           else
-            printf 'Invalid branch: %s\nSee docs/architecture/BRANCHING.md\n' "$HEAD_REF" >&2
+            printf 'Invalid branch: %s\nSee docs/WORKFLOW.md\n' "$HEAD_REF" >&2
             exit 1
           fi
