@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 UNKNOWN = "UNVERIFIED"
+SLURM_LOG = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*\.(\d{7,})(?:_\d+)?\.(?:out|err|log)$|^(?:stdout|stderr)\.(\d{7,})$")
 SUMMARY_FIELDS = (
     "trial", "feature", "mode", "prologue_s", "search_s", "total_s",
     "queries_run", "quality", "identical_v1", "worker_threads", "warmup_runs",
@@ -80,30 +81,35 @@ def job_ids(directory):
     if path.is_file():
         found.update(re.findall(r"(?<!\d)\d{7,}(?!\d)", path.read_text(errors="replace")))
     for entry in directory.iterdir() if directory.is_dir() else ():
-        match = re.match(r"^(?:perf|smoke|stdout|stderr|probe|msa_probe)\.(\d{7,})\.", entry.name)
+        match = SLURM_LOG.fullmatch(entry.name)
         if match:
-            found.add(match.group(1))
-        match = re.match(r"^stdout\.(\d{7,})$", entry.name)
-        if match:
-            found.add(match.group(1))
+            found.add(match.group(1) or match.group(2))
     return ",".join(sorted(found, key=int)) if found else UNKNOWN
 
 
 def summary(workspace, directory):
-    path = directory / "summary.tsv"
-    if not path.is_file():
+    primary = directory / "summary.tsv"
+    paths = [primary] if primary.is_file() else sorted(
+        child / "summary.tsv" for child in directory.iterdir()
+        if child.is_dir() and not child.is_symlink() and (child / "summary.tsv").is_file()
+    )
+    if not paths:
         return UNKNOWN, "NO_SUMMARY", UNKNOWN, []
-    with path.open(newline="") as stream:
-        reader = csv.DictReader(stream, delimiter="\t")
-        if (not reader.fieldnames or not all(reader.fieldnames)
-                or len(set(reader.fieldnames)) != len(reader.fieldnames)
-                or "record_path" in reader.fieldnames or "summary_path" in reader.fieldnames):
-            return relative(workspace, path), "UNPARSED", UNKNOWN, []
-        rows = list(reader)
-        if any(None in row for row in rows):
-            return relative(workspace, path), "UNPARSED", UNKNOWN, []
+    path_list = ",".join(relative(workspace, path) for path in paths)
+    rows = []
+    for path in paths:
+        with path.open(newline="") as stream:
+            reader = csv.DictReader(stream, delimiter="\t")
+            if (not reader.fieldnames or not all(reader.fieldnames)
+                    or len(set(reader.fieldnames)) != len(reader.fieldnames)
+                    or "record_path" in reader.fieldnames or "summary_path" in reader.fieldnames):
+                return path_list, "UNPARSED", UNKNOWN, []
+            source_rows = list(reader)
+            if any(None in row for row in source_rows):
+                return path_list, "UNPARSED", UNKNOWN, []
+        rows.extend(dict(row, summary_path=relative(workspace, path)) for row in source_rows)
     state = "HAS_TRIALS" if rows else "HEADER_ONLY"
-    return relative(workspace, path), state, str(len(rows)), rows
+    return path_list, state, str(len(rows)), rows
 
 
 def record(workspace, kind, directory, task_id, variant, run_id):
@@ -125,7 +131,7 @@ def record(workspace, kind, directory, task_id, variant, run_id):
     summary_path, summary_state, summary_rows, rows = summary(workspace, directory)
     logs = sorted(
         entry for entry in directory.iterdir()
-        if entry.is_file() and re.match(r"^(?:perf|smoke|stdout|stderr|probe|msa_probe)\.\d{7,}\.out$", entry.name)
+        if entry.is_file() and SLURM_LOG.fullmatch(entry.name)
     )
     result = {
         "record_kind": kind, "task_id": task_id, "variant": variant,
@@ -143,7 +149,6 @@ def record(workspace, kind, directory, task_id, variant, run_id):
     trials = [dict(row) for row in rows]
     for trial in trials:
         trial["record_path"] = record_path
-        trial["summary_path"] = summary_path
     return result, trials
 
 
@@ -201,14 +206,15 @@ def collect(workspace):
 
 
 def collect_aliases(workspace, records):
-    probes = workspace / "experiments" / "supermsa" / "probes"
+    root = workspace / "experiments" / "supermsa"
+    probes = root / "probes"
     canonical = {row["record_path"] for row in records}
     aliases = []
-    migrated = (workspace / "experiments/supermsa/dp").is_dir()
+    migrated = any((root / domain).is_dir() for domain in ("dp", "ck", "qs", "sa", "ev"))
     if migrated:
-        root = workspace / "experiments/supermsa"
         candidates = []
-        for parent in (probes, root / "runs", root / "analysis", workspace / "baselines/supermsa"):
+        for parent in (probes, root / "runs", root / "analysis", root / "scripts",
+                       workspace / "baselines/supermsa"):
             if parent.is_dir():
                 candidates.extend(path for path in parent.rglob("*") if path.is_symlink())
         candidates.extend(path for path in root.iterdir() if path.is_symlink())
