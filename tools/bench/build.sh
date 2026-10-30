@@ -29,7 +29,7 @@ for ref in "$@"; do
     [ ! -e "$dir" ] || { echo "ERROR: $dir 是未完成的编译，删除后重试" >&2; exit 1; }
 
     mkdir -p "$dir"
-    g archive "$sha" | tar -x -C "$dir"
+    g archive "$sha" | tar -x -m -C "$dir"   # -m：不还原 commit 时间戳，避免时钟偏差干扰 make
     (
         cd "$dir"
         autoconf
