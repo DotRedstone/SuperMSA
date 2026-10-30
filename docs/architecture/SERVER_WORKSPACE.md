@@ -1,6 +1,6 @@
 # 服务器工作区
 
-2026-10-30 现场核对：`WORK/dot` 下有 `SuperMSA/` 工作副本、`experiments/supermsa/`、`baselines/supermsa/`、`preliminary/` 和 `downloads/`。旧实验主要位于 `experiments/supermsa/probes/`，约 148 GB；`runs/` 约 113 MB。探针中存在多个十 GB 级预处理数据库副本，不能仅凭文件名或大小认定内容相同。旧 `t1` 至 `t5` 入口中有 9 个是指向 `probes/experiments/` 的符号链接。当前服务器工作副本有未提交的源码、脚本及构建文件，整理实验时不得重置或清理该副本。上述是目录与状态观察，不代表正式运行验收。
+2026-10-30 现场整理：服务器工作区根目录下有 `SuperMSA/` 工作副本、`experiments/supermsa/`、`baselines/supermsa/`、`preliminary/` 和 `downloads/`。旧目录已在同一文件系统内按[迁移映射](../experiments/LEGACY_MIGRATION.md)重命名，规范实验实体位于 `experiments/supermsa/{dp,ck,qs,ev}/<task>/<variant>/<run-id>/`，历史附属文件位于 `assets/`。原 `probes/`、`runs/`、`analysis/` 及基线日志路径保留兼容链接。服务器源码工作副本原有的未提交改动未处理。以上是目录完整性检查，不代表正式运行验收。
 
 ## 目录原则
 
@@ -11,4 +11,4 @@
 
 ## 后续核对
 
-[`catalog.py`](../../tools/experiments/catalog.py) 为迁移后的规范目录生成索引与符号链接视图；旧路径由兼容链接保持可用。若将来需要回收大型预处理副本，须逐项核对内容哈希、作业和脚本引用，并保留可复现的生成方式与回退路径；目前未核实这些条件。私有主机名、账号、内部地址及凭据不写入仓库。
+当前索引见[实验记录](../experiments/INDEX.md)。全部实验区符号链接和旧索引视图均可解析；旧 `probes/` 顶层没有剩余实体实验，当前提交脚本会在规范目录下创建新运行。若将来需要回收大型预处理副本，须逐项核对内容哈希、作业和脚本引用，并保留可复现的生成方式与回退路径；目前未核实这些条件。私有主机名、账号、内部地址及凭据不写入仓库。

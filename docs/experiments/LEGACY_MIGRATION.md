@@ -3,9 +3,9 @@
 旧实验按 `experiments/supermsa/<domain>/<task>/<variant>/<run-id>/` 迁移。迁移工具为 [`migrate_legacy.py`](../../tools/experiments/migrate_legacy.py)；每项使用同一文件系统内的重命名，旧路径保留相对符号链接。工具记录原路径、新路径、设备号、inode 和文件清单，可验证或回退。目录中的原始日志、源码快照和结果不改写。
 
 ```bash
-python3 tools/experiments/migrate_legacy.py --workspace "$HOME/WORK/dot" --snapshot legacy-20261030 --plan
-python3 tools/experiments/migrate_legacy.py --workspace "$HOME/WORK/dot" --snapshot legacy-20261030 --apply
-python3 tools/experiments/migrate_legacy.py --workspace "$HOME/WORK/dot" --snapshot legacy-20261030 --verify
+python3 tools/experiments/migrate_legacy.py --workspace /path/to/workspace --snapshot legacy-20261030 --plan
+python3 tools/experiments/migrate_legacy.py --workspace /path/to/workspace --snapshot legacy-20261030 --apply
+python3 tools/experiments/migrate_legacy.py --workspace /path/to/workspace --snapshot legacy-20261030 --verify
 # 仅在需要恢复旧实体路径且确认没有新作业依赖新路径时使用 --rollback。
 ```
 
@@ -33,3 +33,9 @@ python3 tools/experiments/migrate_legacy.py --workspace "$HOME/WORK/dot" --snaps
 `probes/` 顶层散落的源码包、提交标记、历史提交脚本与分析文件分别进入 `assets/source-archives/`、`assets/source-markers/`、`assets/legacy-scripts/`、`assets/analysis/`。按现有文件名可识别归属的源码包与提交标记改用任务和方案前缀，例如 `supermsa-t1.tar` 改为 `DP-01-V01-onepass-source.tar`，原文件名保留兼容链接；文件内容对应关系仍需另行核验。`analysis/parallel-scan-r01.tsv` 同样进入 `assets/analysis/`。完整逐文件映射保存在服务器迁移清单中。历史 `t1` 至 `t5` 别名继续指向原兼容路径，旧 catalog 快照也可通过这些路径读取。
 
 迁移只调整实验工作区，不重置服务器上的源码工作副本，不触碰比赛输入、HPL 作业、评分公式或已有 Git 分支。迁移前必须确认 SuperMSA 作业均已结束；迁移后运行 `--verify`、生成新 catalog，并检查全部旧别名和原有数据链接。正式正确性与性能结论仍以原始实验和完整运行结果为准。
+
+## 2026-10-30 执行结果
+
+现场确认无 SuperMSA 作业后执行了 52 项重命名；迁移前后的设备号、inode 与文件清单一致，19,445 个文件、868 个目录、187 个内部链接均保留。旧路径作为兼容链接；当前实验区全部 364 个链接可解析。推荐索引位于 `catalog/20261030T034039Z/`，包含 24 项规范运行、44 行试验、61 条别名及 42 个附属文件；旧索引视图仍可访问。
+
+旧 `scripts/catalog.py`、`scripts/submit-run.sh` 和 `scripts/run.template.json` 在服务器上分别备份为 `scripts/catalog-2277aee.py`、`assets/legacy-scripts/submit-run-pre-migration.sh` 和 `scripts/run.template.pre-migration.json`；实体迁移后首次生成的 catalog 脚本另存为 `scripts/catalog-physical-initial.py`。当前 `scripts/submit-run.sh` 要求任务、方案和轮次参数，并支持 `--dry-run`；未实际提交新作业。只清理了本次检查生成的 4 个 Python 字节码缓存，未删除实验数据、源码包或日志。大型预处理数据库副本尚未逐项验证内容与引用，继续保留。
