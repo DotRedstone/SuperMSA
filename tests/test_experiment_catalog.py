@@ -1,4 +1,5 @@
 import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,6 +42,7 @@ class CatalogTest(unittest.TestCase):
                 aliases = list(csv.DictReader(stream, delimiter="\t"))
             with (output / "supporting.tsv").open() as stream:
                 supporting = list(csv.DictReader(stream, delimiter="\t"))
+            self.assertEqual(json.loads((output / "manifest.json").read_text())["path_base"], "workspace_root")
             first_record = next(row for row in records if row["run_id"] == "abba-r01")
             second_record = next(row for row in records if row["run_id"] == "abba-r02")
             baseline_record = next(row for row in records if row["record_kind"] == "BASELINE_LOG")

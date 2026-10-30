@@ -312,13 +312,13 @@ def create_catalog(workspace, snapshot):
         "trial_count": len(trials),
         "alias_count": len(aliases),
         "supporting_count": len(supporting),
-        "path_base": "WORK/dot",
+        "path_base": "workspace_root",
         "source_policy": "Existing files are referenced and not modified.",
     }
     (temporary / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     (temporary / "README.md").write_text(
         "# SuperMSA 实验索引快照\n\n"
-        "路径相对于 `WORK/dot`。`records.tsv` 列出不重复的原目录与已有证据；"
+        "路径相对于传入的工作区根目录。`records.tsv` 列出不重复的原目录与已有证据；"
         "`trials.tsv` 按原列名摘录现有 `summary.tsv` 的试验行；"
         "`aliases.tsv` 记录历史符号链接；`by-task/` 是指向原文件的分类链接视图。"
         "`supporting.tsv` 列出顶层脚本、源码包、分析文件和日志，不推断其与运行的对应关系。"
