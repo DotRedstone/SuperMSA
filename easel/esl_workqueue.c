@@ -39,6 +39,7 @@ esl_workqueue_Create(int size)
   int             i;
   int             status;
   ESL_WORK_QUEUE *queue = NULL;
+  const char     *signal_env = getenv("MSA_WQ_SIGNAL_ONE");
 
   ESL_ALLOC(queue, sizeof(ESL_WORK_QUEUE));
 
@@ -52,6 +53,10 @@ esl_workqueue_Create(int size)
 
   queue->queueSize       = size;
   queue->pendingWorkers  = 0;
+  /* A single produced buffer needs only one sleeping consumer.
+   * Keep upstream broadcast as default until A/B correctness/performance
+   * are verified. Read the environment just once, not per enqueue. */
+  queue->msa_signal_one = (signal_env != NULL && strcmp(signal_env, "1") == 0);
 
   if (pthread_mutex_init(&queue->queueMutex, NULL) != 0)     ESL_XEXCEPTION(eslESYS, "mutex init failed");
 
@@ -515,7 +520,16 @@ int esl_workqueue_ReaderUpdate(ESL_WORK_QUEUE *queue, void *in, void **out)
 
       if (queue->pendingWorkers != 0)
 	{
-	  if (pthread_cond_broadcast (&queue->workerQueueCond) != 0) ESL_EXCEPTION(eslESYS, "broadcast failed");
+	  /* One newly published block needs only one sleeping worker.
+	   * Calling broadcast here can wake every waiting thread, making
+	   * them contend for one item (thundering herd). */
+	  if (queue->msa_signal_one) {
+	    if (pthread_cond_signal(&queue->workerQueueCond) != 0)
+	      ESL_EXCEPTION(eslESYS, "signal failed");
+	  } else {
+	    if (pthread_cond_broadcast(&queue->workerQueueCond) != 0)
+	      ESL_EXCEPTION(eslESYS, "broadcast failed");
+	  }
 	}
     }
 
