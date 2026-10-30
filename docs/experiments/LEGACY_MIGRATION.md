@@ -30,6 +30,6 @@ python3 tools/experiments/migrate_legacy.py --workspace "$HOME/WORK/dot" --snaps
 | `probes/experiments/p01-reader-worker-profile/*` | `ev/EV-02/V01-reader-worker/*` | Reader/Worker 诊断 |
 | `probes/perf-hotspot-r01` | `ev/EV-03/V01-hotspot/profile-r01` | 通用热点诊断 |
 
-`probes/` 顶层散落的源码包、提交标记、历史提交脚本与分析文件分别进入 `assets/source-archives/`、`assets/source-markers/`、`assets/legacy-scripts/`、`assets/analysis/`；`analysis/parallel-scan-r01.tsv` 同样进入 `assets/analysis/`。完整逐文件映射保存在服务器迁移清单中。历史 `t1` 至 `t5` 别名继续指向原兼容路径，旧 catalog 快照也可通过这些路径读取。
+`probes/` 顶层散落的源码包、提交标记、历史提交脚本与分析文件分别进入 `assets/source-archives/`、`assets/source-markers/`、`assets/legacy-scripts/`、`assets/analysis/`。按现有文件名可识别归属的源码包与提交标记改用任务和方案前缀，例如 `supermsa-t1.tar` 改为 `DP-01-V01-onepass-source.tar`，原文件名保留兼容链接；文件内容对应关系仍需另行核验。`analysis/parallel-scan-r01.tsv` 同样进入 `assets/analysis/`。完整逐文件映射保存在服务器迁移清单中。历史 `t1` 至 `t5` 别名继续指向原兼容路径，旧 catalog 快照也可通过这些路径读取。
 
 迁移只调整实验工作区，不重置服务器上的源码工作副本，不触碰比赛输入、HPL 作业、评分公式或已有 Git 分支。迁移前必须确认 SuperMSA 作业均已结束；迁移后运行 `--verify`、生成新 catalog，并检查全部旧别名和原有数据链接。正式正确性与性能结论仍以原始实验和完整运行结果为准。

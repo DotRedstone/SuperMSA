@@ -40,6 +40,28 @@ LEGACY_PROBE_FILES = (
     "supermsa-t3-validation-r02.tar", "supermsa-t4-r01.tar", "supermsa-t5-r01.tar",
     "t4-r01.commit", "t5-r01.commit",
 )
+RENAMED_FILES = {
+    "supermsa-bin8-source.tar": "DP-02-V01-bin8-source.tar",
+    "supermsa-dsq-fix.tar": "DP-02-V02-dsq-fix.tar",
+    "supermsa-e05-r01.commit": "DP-01-V02-direct-map-r01.commit",
+    "supermsa-e05-r01.tar": "DP-01-V02-direct-map-r01.tar",
+    "supermsa-e06-r01.commit": "DP-01-V03-config-cache-r01.commit",
+    "supermsa-e06-r01.tar": "DP-01-V03-config-cache-r01.tar",
+    "supermsa-four-way.tar": "DP-02-V02-four-way-source.tar",
+    "supermsa-hitdiag.tar": "EV-03-V01-hitdiag-source.tar",
+    "supermsa-queue-t4t5-r01.tar": "DP-04-05-queue-r01.tar",
+    "supermsa-r02-helper.tar": "EV-01-abba-r02-helper.tar",
+    "supermsa-t1.tar": "DP-01-V01-onepass-source.tar",
+    "supermsa-t1-validation-r02.tar": "DP-01-V01-onepass-validation-r02.tar",
+    "supermsa-t2.tar": "DP-03-V01-batched-io-source.tar",
+    "supermsa-t2-validation-r02.tar": "DP-03-V01-batched-io-validation-r02.tar",
+    "supermsa-t3.tar": "DP-04-V01-queue-geometry-source.tar",
+    "supermsa-t3-validation-r02.tar": "DP-04-V01-queue-geometry-validation-r02.tar",
+    "supermsa-t4-r01.tar": "DP-05-V01-signal-one-r01.tar",
+    "supermsa-t5-r01.tar": "EV-02-V01-reader-worker-r01.tar",
+    "t4-r01.commit": "DP-05-V01-signal-one-r01.commit",
+    "t5-r01.commit": "EV-02-V01-reader-worker-r01.commit",
+}
 
 
 def moves():
@@ -61,7 +83,7 @@ def moves():
         group = {".tar": "source-archives", ".commit": "source-markers",
                  ".py": "legacy-scripts", ".sh": "legacy-scripts",
                  ".txt": "analysis"}[extension]
-        result.append((ROOT / "probes" / name, ROOT / "assets" / group / name))
+        result.append((ROOT / "probes" / name, ROOT / "assets" / group / RENAMED_FILES.get(name, name)))
     return result
 
 
