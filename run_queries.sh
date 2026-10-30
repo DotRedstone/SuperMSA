@@ -28,6 +28,15 @@ WARMUP=${WARMUP:-5}
 PARALLEL=${PARALLEL:-1}  # concurrent queries (default 1 for baseline compatibility)
 FORCE=${FORCE:-0}
 DB=$DATA/database.fasta
+# The binary file is produced in this run's timed prologue, not before.
+# Keep the original FASTA argument for HMMER output metadata.
+if [ "${MSA_BIN8:-0}" = 1 ]; then
+    MSA_BIN8_DB="$OUT/prepared/database.bin8"
+    [ -s "$MSA_BIN8_DB" ] || { echo "ERROR: requested bin8 database is missing: $MSA_BIN8_DB" >&2; exit 1; }
+    export MSA_BIN8_DB
+else
+    unset MSA_BIN8_DB
+fi
 TIMING=$OUT/timing.tsv
 
 die() { echo "ERROR: $*" >&2; exit 1; }
