@@ -21,7 +21,7 @@ resolve_sha() {
 }
 
 for ref in "$@"; do
-    sha=$(resolve_sha "$ref") || { echo "ERROR: 无法解析 $ref（先在 $REPO 执行 git pull）" >&2; exit 1; }
+    sha=$(resolve_sha "$ref") || { echo "ERROR: 无法解析 $ref（先在本地 push 并执行 tools/bench/sync_hpc.sh）" >&2; exit 1; }
     dir=$BUILDS/${sha:0:12}
     if [ -f "$dir/BINARIES.sha256" ]; then
         echo "BUILD_OK $ref ${sha:0:12} (cached)"; continue

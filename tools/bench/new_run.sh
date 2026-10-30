@@ -57,7 +57,7 @@ qfile=$REPO/tools/bench/querysets/$queries.txt
 builds=$EXP/builds
 resolve() {
     local sha
-    sha=$(resolve_sha "$1") || die "无法解析 $1（先在 $REPO 执行 git pull）"
+    sha=$(resolve_sha "$1") || die "无法解析 $1（先在本地 push 并执行 tools/bench/sync_hpc.sh）"
     [ -f "$builds/${sha:0:12}/BINARIES.sha256" ] || die "$1 (${sha:0:12}) 尚未编译：在 test01 上执行 tools/bench/build.sh $1"
     echo "$sha"
 }
