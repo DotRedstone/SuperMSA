@@ -12,8 +12,10 @@
 | `CK-01` | SSV SIMD Band Limit | `perf/ssv-band-limit` | 候选，未入 `main` |
 | `QS-01` | Query 级并行 | P6T8 | 功能分支与 release 分支同 HEAD，未入 `main` |
 | `SA-01` | 搜索策略与质量权衡 | 暂无已确认方案 | 未开始 |
+| `EV-00` | 基线与早期探针 | 服务器旧基线日志、MSA 探针 | 历史记录；无新的性能结论 |
 | `EV-01` | 四格式与 ABBA 比较 | Four-way、ABBA r02 | 历史实验待索引 |
 | `EV-02` | Reader/Worker 诊断 | T5 | 诊断分支，未入 `main` |
+| `EV-03` | 通用热点诊断 | Perf Hotspot r01 | 历史诊断；未入 `main` |
 
 `DP-01` 的新方案标识建议为 `V01-onepass`、`V02-direct-map`、`V03-config-cache`、`V04-chunk-64k`。它们只是索引；其中 E06 与 E07 都从 E05 演进，E07 **不**继承 E06。历史 T/E 编号仍作为原始记录别名，不改写旧日志。
 

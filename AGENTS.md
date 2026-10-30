@@ -1,20 +1,20 @@
-# SuperMSA 仓库协作约定
+# SuperMSA 仓库维护约定
 
-开始修改前先读 `README.md` 和相关文档，并运行 `git status --short`。保留已有改动；一个功能使用一个短期分支，提交只包含同一目的的改动。提交信息使用带非空 scope 的 Conventional Commits，例如 `docs(architecture): 记录分支来源`。
+开始前阅读 `README.md`、相关目录文档，并运行 `git status --short`。保留已有未提交文件；只修改本任务涉及的内容。
 
-## 代码与集成
+## 分支与提交
 
-- `main` 是稳定入口。功能分支从 `main` 创建；确需继承另一实验分支时，在 PR 和实验元数据中记录起点及依赖。不要为领域预建常驻集成分支。
-- 不改写、强推或删除现有公开分支。旧分支与新分支的对应关系见 [迁移索引](docs/architecture/MIGRATION.md)。
-- 保留根目录的 `prologue.sh`、`run_queries.sh`、`job_baseline.slurm` 等比赛入口。移动脚本前检查全部调用方及工作目录；不得为了整理目录改变搜索、评分或数据语义。
-- 不使用 query 或数据库标注信息为搜索结果开捷径。预处理必须处于正式计时窗口内；正式得分时间为 `prologue time + search time`。
-- 先验证构建、冒烟测试和正确性，再比较性能。性能结论应依据可追溯的多轮实验；构建成功或提交脚本 dry run 不等于正式运行通过。
+- `main` 是稳定入口。每项修改从 `main` 创建短期分支；确需继承其他实验分支时，在 PR 中写明起点与依赖。旧公开分支不改写、不强推、不删除；历史映射见 [迁移说明](docs/architecture/MIGRATION.md)。
+- 一个提交只承担一个目的。行为变更、目录迁移和纯文档整理分别提交。提交信息使用带非空 scope 的 Conventional Commits，英文类型、中文描述，例如 `fix(reader): 修复空输入处理`。
+- PR 写明变更范围、验证命令及结果、回退方式。未经正确性验证的性能候选不得直接进入 `main`。分支及集成流程见 [分支规范](docs/architecture/BRANCHING.md)和[工作流程](docs/architecture/WORKFLOW.md)。
 
-## 集群与实验
+## 代码与测试脚本
 
-- 登录节点只做轻量管理；编译和小测试在允许的测试节点执行，完整计算通过 Slurm。启动任务前检查集群规则和当前作业。
-- 正在运行的作业所依赖的源码、二进制、输入、输出和工作目录不得移动或清理。未经核实的文件归为 `UNKNOWN` 并保留。
-- 按 [实验规范](docs/experiments/INDEX.md)记录提交 SHA、构建参数、数据、Slurm 资源、完整日志、正确性和计时。原始日志不改写、不拼接；正式提交结果单独保存。
-- 不提交凭据、私有部署值、比赛原始数据库、大型运行日志和生成的构建产物。除任务明确要求外，不更新依赖来源或锁文件。
+- 保留比赛入口 `prologue.sh`、`run_queries.sh` 及正式作业脚本的调用路径。移动辅助脚本时同步检查调用方、工作目录和相对路径；不为目录整理改动搜索或评分语义。
+- 可复用工具放在 `tools/`，实验作业与分析按 [仓库结构](docs/architecture/REPOSITORY.md)存放。自动检查放在 `tests/`：使用小型合成样例、明确断言和非零失败退出码；默认不访问网络、不提交 Slurm 作业、不读取正式比赛数据。测试数据不得包含个人部署值或真实运行数据。
+- 修改 Python 或 Bash 脚本至少执行 `python3 -m py_compile <脚本>` 或 `bash -n <脚本>`；涉及行为的修改运行 `python3 -m unittest discover -s tests -p 'test_*.py'` 中相关测试。可在允许的测试节点运行构建与 `smoke_test.sh`；完整正确性和性能实验通过 Slurm 运行，并按[实验规范](docs/experiments/INDEX.md)留存原始证据。语法检查、合成测试和构建成功均不等于正式 100-query 验收。
 
-项目结构与验证入口见 [仓库结构](docs/architecture/REPOSITORY.md)和[工作流程](docs/architecture/WORKFLOW.md)。
+## 实验与服务器
+
+- 新实验使用 `experiments/supermsa/<domain>/<task>/<variant>/<run-id>/`，每轮记录源码、构建、数据、资源、日志、正确性与计时。正式时间包括预处理和搜索；不得利用 query 或数据库标注绕过搜索。
+- 登录节点只做轻量管理。整理服务器文件前核对 Slurm 作业和引用；运行中的作业依赖不可移动。原始日志和评分结果不改写；不提交凭据、私有地址、比赛数据库、大型日志或构建产物。服务器布局与迁移方式见[工作区说明](docs/architecture/SERVER_WORKSPACE.md)。

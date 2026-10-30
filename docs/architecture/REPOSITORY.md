@@ -12,6 +12,8 @@
 | `docs/architecture/` | 仓库、分支、流程及迁移边界 |
 | `docs/optimization/` | 技术任务索引；方案实现仍位于负责该行为的源码模块 |
 | `docs/experiments/` | 实验编号、元数据规范及历史索引 |
+| `tools/experiments/` | 实验索引、受控历史迁移及元数据模板 |
+| `tests/` | 不依赖集群和正式数据的工具单元测试 |
 
 现有性能分支还包含 `scripts/`、`tests/`、额外 Slurm 作业和实验文档。它们尚未集成到 `main`，不能按主线目录推断其文件清单。整理时优先把通用工具归入 `tools/db/`、`tools/build/` 或 `tools/runtime/`，把实验驱动和分析归入 `benchmarks/`；仅在确认调用关系后逐项移动。每次路径变更同时更新调用方、文档和验证命令。根目录比赛入口可保留为薄包装脚本。
 
