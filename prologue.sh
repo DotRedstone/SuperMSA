@@ -24,6 +24,33 @@ export REPO DATA OUT
 elapsed() { awk -v a="$1" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}'; }
 
 prepare() {
+    if [ "${MSA_DSQDATA:-0}" = 1 ]; then
+        [ "${MSA_BIN8:-0}" != 1 ] || { echo "ERROR: MSA_BIN8 and MSA_DSQDATA are mutually exclusive" >&2; return 1; }
+        local writer="$REPO/scripts/fasta_to_dsqdata"
+        local prefix="$OUT/prepared/database"
+        local f total
+        [ -x "$writer" ] || { echo "ERROR: missing DSQDATA writer" >&2; return 1; }
+        [ -s "$DATA/database.fasta" ] || { echo "ERROR: missing original FASTA" >&2; return 1; }
+        mkdir -p "$OUT/prepared"
+        for f in "$prefix" "$prefix.dsqi" "$prefix.dsqm" "$prefix.dsqs"; do
+            [ ! -e "$f" ] || {
+                echo "ERROR: DSQDATA artifact exists: $f; use a fresh OUT" >&2
+                return 1
+            }
+        done
+        # Every byte of conversion is produced during timed prepare().
+        if ! "$writer" "$DATA/database.fasta" "$prefix"; then
+            rm -f -- "$prefix" "$prefix.dsqi" "$prefix.dsqm" "$prefix.dsqs"
+            return 1
+        fi
+        total=0
+        for f in "$prefix" "$prefix.dsqi" "$prefix.dsqm" "$prefix.dsqs"; do
+            [ -s "$f" ] || { echo "ERROR: incomplete DSQDATA artifact" >&2; return 1; }
+            total=$((total + $(stat -c '%s' "$f")))
+        done
+        echo "DSQDATA_FILE_BYTES=$total"
+        echo "DSQDATA_PREPARED=$prefix"
+    fi
     # Optional 8-bit digital DB. Output is constructed only inside the
     # measured prologue and is never reused across benchmark runs.
     if [ "${MSA_BIN8:-0}" = 1 ]; then

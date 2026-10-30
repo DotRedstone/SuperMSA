@@ -143,6 +143,8 @@ typedef struct esl_dsqdata_s {
 /* Functions in the API
  */
 extern int  esl_dsqdata_Open   (ESL_ALPHABET **byp_abc, char *basename, int nconsumers, ESL_DSQDATA **ret_dd);
+/* Optional packing-reader worker budget; default Open remains unchanged. */
+extern int  esl_dsqdata_OpenWithUnpackers(ESL_ALPHABET **byp_abc, char *basename, int nconsumers, int n_unpackers, ESL_DSQDATA **ret_dd);
 extern int  esl_dsqdata_Read   (ESL_DSQDATA *dd, ESL_DSQDATA_CHUNK **ret_chu);
 extern int  esl_dsqdata_Recycle(ESL_DSQDATA *dd, ESL_DSQDATA_CHUNK *chu);
 extern int  esl_dsqdata_Close  (ESL_DSQDATA *dd);
