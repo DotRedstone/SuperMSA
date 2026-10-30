@@ -11,6 +11,43 @@ HEADER = "trial\tfeature\tmode\tprologue_s\tsearch_s\ttotal_s\tqueries_run\tqual
 
 
 class CatalogTest(unittest.TestCase):
+    def test_migrated_logs_and_legacy_script_links_are_indexed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            root = workspace / "experiments/supermsa"
+            run = root / "ck/CK-01/V01-band-limit/sweep-r01"
+            run.mkdir(parents=True)
+            (run / "band.16167175.out").write_text("completed\n")
+            (run / "scan.16158805_0.out").write_text("completed\n")
+            config = run / "p6-t8"
+            config.mkdir()
+            (config / "summary.tsv").write_text("config\tseconds\np6-t8\t567.8\n")
+            script = root / "assets/legacy-scripts/catalog-old.py"
+            script.parent.mkdir(parents=True)
+            script.write_text("# old version\n")
+            alias = root / "scripts/catalog-old.py"
+            alias.parent.mkdir()
+            alias.symlink_to("../assets/legacy-scripts/catalog-old.py")
+
+            output, records_count, trials_count = create_catalog(workspace, "migrated")
+            self.assertEqual((records_count, trials_count), (1, 1))
+            with (output / "records.tsv").open() as stream:
+                record = next(csv.DictReader(stream, delimiter="\t"))
+            with (output / "trials.tsv").open() as stream:
+                trial = next(csv.DictReader(stream, delimiter="\t"))
+            with (output / "aliases.tsv").open() as stream:
+                aliases = list(csv.DictReader(stream, delimiter="\t"))
+            with (output / "supporting.tsv").open() as stream:
+                supporting = list(csv.DictReader(stream, delimiter="\t"))
+            self.assertEqual(record["job_ids"], "16158805,16167175")
+            self.assertEqual(record["summary_state"], "HAS_TRIALS")
+            self.assertEqual(trial["summary_path"], (config / "summary.tsv").relative_to(workspace).as_posix())
+            self.assertEqual(trial["seconds"], "567.8")
+            self.assertEqual(len(record["raw_log_paths"].split(",")), 2)
+            self.assertEqual(aliases, [{"alias_path": alias.relative_to(workspace).as_posix(),
+                                        "canonical_path": script.relative_to(workspace).as_posix()}])
+            self.assertEqual(next(row for row in supporting if row["file_path"].endswith("catalog-old.py"))["role"], "SCRIPT")
+
     def test_empty_and_completed_summaries_remain_distinct(self):
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)

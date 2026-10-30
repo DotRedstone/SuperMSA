@@ -39,3 +39,11 @@ python3 tools/experiments/migrate_legacy.py --workspace /path/to/workspace --sna
 现场确认无 SuperMSA 作业后执行了 52 项重命名；迁移前后的设备号、inode 与文件清单一致，19,445 个文件、868 个目录、187 个内部链接均保留。旧路径作为兼容链接；当前实验区全部 364 个链接可解析。推荐索引位于 `catalog/20261030T034039Z/`，包含 24 项规范运行、44 行试验、61 条别名及 42 个附属文件；旧索引视图仍可访问。
 
 旧 `scripts/catalog.py`、`scripts/submit-run.sh` 和 `scripts/run.template.json` 在服务器上分别备份为 `scripts/catalog-2277aee.py`、`assets/legacy-scripts/submit-run-pre-migration.sh` 和 `scripts/run.template.pre-migration.json`；实体迁移后首次生成的 catalog 脚本另存为 `scripts/catalog-physical-initial.py`。当前 `scripts/submit-run.sh` 要求任务、方案和轮次参数，并支持 `--dry-run`；未实际提交新作业。只清理了本次检查生成的 4 个 Python 字节码缓存，未删除实验数据、源码包或日志。大型预处理数据库副本尚未逐项验证内容与引用，继续保留。
+
+## 2026-10-30 后续归档与证据核对
+
+在首轮迁移的 52 项之外，8 个历史辅助文件已归入 `assets/legacy-scripts/` 或迁移记录目录，旧位置保留相对链接。其中包括旧版 catalog、运行模板、两份已结束作业的 Slurm 脚本，以及旧别名表。逐项原路径、目标路径、inode、大小和哈希记录于服务器的 `migrations/legacy-20261030/support-cleanup.json` 与 `historical-job-scripts.json`。上文所述三个脚本备份现位于 `assets/legacy-scripts/`，旧位置仍可读；当前使用的脚本在 `scripts/`。
+
+旧源码工作副本中忽略的 `results/` 是已完成的 100 条查询基线结果，203 个文件已在同一文件系统内移动到 `ev/EV-00/V00-baseline/job-16155687/results/`。此处不建立旧路径链接，避免新运行复用旧输出目录并覆盖历史结果。其逐文件清单、设备号、inode 和小型评分表哈希保存在 `migrations/legacy-20261030/baseline-results-move.json`；回退前须先确认旧路径仍为空且没有新作业写入。原始 stdout 和评分表未改写。
+
+更新后的 catalog 能识别数组作业日志、不同前缀的 Slurm 日志、分层摘要及历史脚本链接。推荐快照 `catalog/20261030T113608Z/` 为 24 项运行、50 行试验、69 条别名及 50 个附属文件。三项首轮作业在 Slurm 中明确为失败，后续轮次均已完成；原始失败证据保留。服务器私有核对记录见 `migrations/legacy-20261030/REVIEW.md`。没有提交新作业或删除大型数据库；历史部分查询结果不替代正式 100 条查询验收。
