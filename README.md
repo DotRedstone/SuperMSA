@@ -83,4 +83,4 @@ squeue -u $USER                      # 查看状态：PD 排队 / R 运行
 
 ## 工程协作
 
-`main` 当前保留比赛基线；性能方案仍在独立分支，不能仅凭分支名判断已通过正式验收。修改前请阅读 [仓库约定](AGENTS.md)、[结构说明](docs/architecture/REPOSITORY.md)、[分支规范](docs/architecture/BRANCHING.md)和[工作流程](docs/architecture/WORKFLOW.md)。现有分支对应关系见[迁移索引](docs/architecture/MIGRATION.md)，技术任务与实验记录分别见[优化索引](docs/optimization/INDEX.md)和[实验索引](docs/experiments/INDEX.md)。
+规范、实验流程与集群用法见 [`docs/WORKFLOW.md`](docs/WORKFLOW.md)；所有方案的状态与结论见 [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md)；旧分支与旧编号的对照见 [`docs/HISTORY.md`](docs/HISTORY.md)。
