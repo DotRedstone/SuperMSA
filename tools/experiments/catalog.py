@@ -80,7 +80,7 @@ def job_ids(directory):
     if path.is_file():
         found.update(re.findall(r"(?<!\d)\d{7,}(?!\d)", path.read_text(errors="replace")))
     for entry in directory.iterdir() if directory.is_dir() else ():
-        match = re.match(r"^(?:perf|smoke|stdout|stderr|probe)\.(\d{7,})\.", entry.name)
+        match = re.match(r"^(?:perf|smoke|stdout|stderr|probe|msa_probe)\.(\d{7,})\.", entry.name)
         if match:
             found.add(match.group(1))
         match = re.match(r"^stdout\.(\d{7,})$", entry.name)
@@ -125,7 +125,7 @@ def record(workspace, kind, directory, task_id, variant, run_id):
     summary_path, summary_state, summary_rows, rows = summary(workspace, directory)
     logs = sorted(
         entry for entry in directory.iterdir()
-        if entry.is_file() and re.match(r"^(?:perf|smoke|stdout|stderr|probe)\.\d{7,}\.out$", entry.name)
+        if entry.is_file() and re.match(r"^(?:perf|smoke|stdout|stderr|probe|msa_probe)\.\d{7,}\.out$", entry.name)
     )
     result = {
         "record_kind": kind, "task_id": task_id, "variant": variant,
@@ -152,29 +152,45 @@ def collect(workspace):
     if not experiments.is_dir():
         raise ValueError("missing experiments/supermsa")
     items = []
-    probes = experiments / "probes"
-    if probes.is_dir():
-        for directory in sorted(probes.iterdir()):
-            if directory.is_dir() and not directory.is_symlink() and directory.name != "experiments":
-                items.append(("PROBE", directory, PROBE_TASKS.get(directory.name, UNKNOWN), directory.name, directory.name))
-        historical = probes / "experiments"
-        if historical.is_dir():
-            for variant in sorted(historical.iterdir()):
-                if variant.is_dir():
-                    for directory in sorted(variant.iterdir()):
-                        if directory.is_dir():
-                            items.append(("EXPERIMENT_RUN", directory, TASKS.get(variant.name, UNKNOWN), variant.name, directory.name))
-    runs = experiments / "runs"
-    if runs.is_dir():
-        for directory in sorted(runs.iterdir()):
-            if directory.is_dir():
-                task = "QS-01" if directory.name.startswith("query-parallel-") else UNKNOWN
-                items.append(("RUN", directory, task, directory.name, directory.name))
-    baseline = workspace / "baselines" / "supermsa"
-    if baseline.is_dir():
-        for path in sorted(baseline.glob("stdout.*")):
-            if path.is_file():
-                items.append(("BASELINE_LOG", path, UNKNOWN, UNKNOWN, path.name))
+    domains = ("dp", "ck", "qs", "sa", "ev")
+    if any((experiments / domain).is_dir() for domain in domains):
+        for domain in domains:
+            parent = experiments / domain
+            if not parent.is_dir():
+                continue
+            for task in sorted(parent.iterdir()):
+                if not task.is_dir() or task.is_symlink():
+                    continue
+                for variant in sorted(task.iterdir()):
+                    if not variant.is_dir() or variant.is_symlink():
+                        continue
+                    for run in sorted(variant.iterdir()):
+                        if run.is_dir() and not run.is_symlink():
+                            items.append(("HISTORICAL_RUN", run, task.name, variant.name, run.name))
+    else:
+        probes = experiments / "probes"
+        if probes.is_dir():
+            for directory in sorted(probes.iterdir()):
+                if directory.is_dir() and not directory.is_symlink() and directory.name != "experiments":
+                    items.append(("PROBE", directory, PROBE_TASKS.get(directory.name, UNKNOWN), directory.name, directory.name))
+            historical = probes / "experiments"
+            if historical.is_dir():
+                for variant in sorted(historical.iterdir()):
+                    if variant.is_dir():
+                        for directory in sorted(variant.iterdir()):
+                            if directory.is_dir():
+                                items.append(("EXPERIMENT_RUN", directory, TASKS.get(variant.name, UNKNOWN), variant.name, directory.name))
+        runs = experiments / "runs"
+        if runs.is_dir():
+            for directory in sorted(runs.iterdir()):
+                if directory.is_dir():
+                    task = "QS-01" if directory.name.startswith("query-parallel-") else UNKNOWN
+                    items.append(("RUN", directory, task, directory.name, directory.name))
+        baseline = workspace / "baselines" / "supermsa"
+        if baseline.is_dir():
+            for path in sorted(baseline.glob("stdout.*")):
+                if path.is_file():
+                    items.append(("BASELINE_LOG", path, UNKNOWN, UNKNOWN, path.name))
 
     records, trials = [], []
     for item in items:
@@ -188,6 +204,19 @@ def collect_aliases(workspace, records):
     probes = workspace / "experiments" / "supermsa" / "probes"
     canonical = {row["record_path"] for row in records}
     aliases = []
+    migrated = (workspace / "experiments/supermsa/dp").is_dir()
+    if migrated:
+        root = workspace / "experiments/supermsa"
+        candidates = []
+        for parent in (probes, root / "runs", root / "analysis", workspace / "baselines/supermsa"):
+            if parent.is_dir():
+                candidates.extend(path for path in parent.rglob("*") if path.is_symlink())
+        candidates.extend(path for path in root.iterdir() if path.is_symlink())
+        for entry in sorted(candidates):
+            target = entry.resolve(strict=True)
+            target_path = relative(workspace, target)
+            aliases.append({"alias_path": relative(workspace, entry), "canonical_path": target_path})
+        return aliases
     if probes.is_dir():
         for entry in sorted(probes.iterdir()):
             if not entry.is_symlink():
@@ -215,7 +244,10 @@ def create_view(workspace, snapshot_dir, records):
 
 def collect_supporting(workspace):
     root = workspace / "experiments" / "supermsa"
-    directories = (root, root / "probes", root / "analysis", root / "scripts")
+    directories = [root, root / "probes", root / "analysis", root / "scripts"]
+    assets = root / "assets"
+    if assets.is_dir():
+        directories.extend(path for path in assets.iterdir() if path.is_dir())
     files = sorted(path for directory in directories if directory.is_dir()
                    for path in directory.iterdir() if path.is_file() and not path.is_symlink())
     result = []
