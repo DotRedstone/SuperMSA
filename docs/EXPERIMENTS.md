@@ -2,7 +2,17 @@
 
 规则见 [`WORKFLOW.md`](WORKFLOW.md)。状态：`proposed` → `running` → `accepted` / `rejected` / `inconclusive`；没有测量就暂缓的记为 `parked`。
 
-**当前 main：QS-01/V03（6 进程 × 8 线程）。** 等 `EV-00/V00-main r01-q100` 复验通过后打 `v1`。
+**当前 main：v2 = v1 + DP-02/V02-bin8（默认开启）。** v1 = QS-01/V03（6 进程 × 8 线程）。
+
+| 版本 | 内容 | q100 总时间 | 证据 |
+|---|---|---|---|
+| v1 | QS-01/V03 | 3576.1 s | EV-00/V00-main r01-q100，job 16208885 |
+| v2 | v1 + DP-02/V02 | 约 1600 s（−53.8%） | DP-02/V02-bin8 r01-q100，job 16208886 |
+
+**教训**：q12 里多是计算密集的查询，会严重低估数据通路的收益（bin8：q12 search −14%，q100 −56%）。DP 类方案一律直接用 q100 筛选。
+
+**下一步**：DP-01/V04（64K 块）在 v2 上的增量（只作用于 prologue 转换），以及它单独与 bin8 的正面对比；
+然后是 DP-01/V01+V02。bin8 之后 search 不再读 FASTA，DP-01 的收益上限就是 prologue 的约 75 s。
 
 ## DP — 数据通路
 
@@ -10,18 +20,18 @@
 |---|---|---|---|---|---|
 | **DP-01** | **FASTA 文本读取** | | | | |
 | V01-onepass | 把 seebuf+addbuf 合并成一次扫描 | `perf/dp-01/v01-onepass` | | running | 旧 q12 ABBA：−20.5 s（−3.5%），两组配对同号。待重跑 q100 |
-| V02-direct-map | 直接复用数字映射表 | `perf/dp-01/v02-direct-map` | V01 | proposed | 预期收益远低于 1%；旧结果待从集群核对 |
-| V03-config-cache | 每个文件只读取一次开关 | `archive/dp-01/v03-config-cache` | V02 | parked | 只优化实验开关本身；方案被接受后开关会删除，收益必然为零 |
-| V04-chunk-64k | 读取块改为 64 KiB | `perf/dp-01/v04-chunk-64k` | | proposed | 未运行 |
+| V02-direct-map | 直接复用数字映射表 | `perf/dp-01/v02-direct-map` | V01 | running | 旧 q12 ABBA（相对 V01）：−11.2 s（−1.9%），配对 +8.5 / +13.9 |
+| V03-config-cache | 每个文件只读取一次开关 | `archive/dp-01/v03-config-cache` | V02 | parked | 旧 q12：−5.8 s，但这部分收益来自每条记录调用 getenv 的开销；方案被接受后开关会删除，这部分开销自然消失 |
+| V04-chunk-64k | 读取块改为 64 KiB | `perf/dp-01/v04-chunk-64k` | | running | r01-q12 ABBA（v1 基础上）：559.9 → 484.6 s（−13.5%），配对 +76.6 / +73.8 |
 | **DP-02** | **预处理数据库格式** | | | | |
 | V01-rewrap | 在 prologue 中把 FASTA 改成每条记录一行 | `archive/dp-02/v01-rewrap` | | rejected | q12：552.5 → 585.4 s；prologue +34.7 s，search 无收益 |
-| V02-bin8 | 预先数字化成 8-bit 库，搜索时 mmap | `perf/dp-02/v02-bin8` | | running | 旧 q12：search 约 480 s，raw 约 575 s（**不同节点**）；prologue 约 75 s。待跑 q100 同节点 ABBA |
-| V03-huffman | 对数字化残基做 Huffman 编码 | `archive/dp-02/v03-huffman` | V02 | parked | 数据库常驻 page cache，I/O 不是瓶颈；解码反而增加 CPU 开销 |
-| V04-dsqdata | 使用 Easel 原生 DSQDATA（5-bit） | `perf/dp-02/v04-dsqdata` | V02 | proposed | 本地 demo 验证通过；等 V02 q100 出结果后再与之对比 |
+| V02-bin8 | 预先数字化成 8-bit 库，搜索时 mmap | main（v2） | | accepted | r01-q100 ABBA：3464.5 → 1600.7 s（−53.8%），配对 +1879 / +1848，全部正确且与 v1 等价 |
+| V03-huffman | 对数字化残基做 Huffman 编码 | `archive/dp-02/v03-huffman` | V02 | rejected | 旧四格式对比：search 828 s（比 raw 慢 47%），prologue 264 s |
+| V04-dsqdata | 使用 Easel 原生 DSQDATA（5-bit） | `archive/dp-02/v04-dsqdata` | V02 | rejected | 旧四格式对比：search 484.5 s，与 bin8 持平；prologue 123 s，比 bin8 多 46 s。任何查询规模下都不如 V02 |
 | V05-bin8-batched-writer | BIN8 转换器批量写出 | `archive/dp-02/v05-bin8-batched-writer` | V02 | inconclusive | 两组配对差值 −12.6 / +15.6 s，符号相反 |
 | **DP-03** | **Reader/Worker 队列** | | | | |
 | V01-queue-geometry | 块 256 条，队列 4 倍 | `archive/dp-03/v01-queue-geometry` | | rejected | q12 两次 tuned 都慢约 0.5% |
-| V02-signal-one | 唤醒改为 signal-one，代替 broadcast | `perf/dp-03/v02-signal-one` | | proposed | 本地多线程测试通过；旧运行待从集群核对 |
+| V02-signal-one | 唤醒改为 signal-one，代替 broadcast | `archive/dp-03/v02-signal-one` | | rejected | 旧 q12 ABBA：两组配对 −0.9 / −2.4 s，略慢 |
 
 ## CK — 计算核心
 
@@ -48,7 +58,7 @@
 | 方案 | 内容 | 引用 | 状态 | 证据 |
 |---|---|---|---|---|
 | **EV-00** | **基线** | | | |
-| V00-main | 每个 vN 发布前的 q100 复验 | main | proposed | |
+| V00-main | 每个 vN 的 q100 复验 | main | accepted | v1：r01-q100，3576.1 s，100/100，与历史 QS-01 等价 |
 | V01-serial-baseline | 原版串行 jackhmmer | `2f85a28` | accepted | job 16155687，q100 |
 | V02-msa-probe | 早期探针 | 集群 legacy | accepted | job 16158363 |
 | **EV-01** | **CPU 热点** | | | |

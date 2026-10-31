@@ -30,6 +30,7 @@
 #endif 
 
 #include "hmmer.h"
+#include "msa_bin8.h"
 
 typedef struct {
 #ifdef HMMER_THREADS
@@ -515,6 +516,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (! esl_sqfile_IsRewindable(dbfp)) 
     p7_Fail("Target sequence file %s isn't rewindable; jackhmmer requires that it is", cfg->dbfile);
 
+  /* Binary target input is opt-in; the original FASTA remains the
+   * canonical output identity and the input to the timed conversion. */
+  {
+    const char *bin8_path = getenv("MSA_BIN8_DB");
+    if (bin8_path != NULL && *bin8_path != '\0') {
+      status = msa_bin8_open(bin8_path);
+      if (status != eslOK)
+        p7_Fail("Cannot open 8-bit database %s (error %d)", bin8_path, status);
+    }
+  }
+
   /* Open the query sequence file  */
   status = esl_sqfile_OpenDigital(abc, cfg->qfile, qformat, NULL, &qfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",      cfg->qfile);
@@ -709,7 +721,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  else if (iteration < maxiterations)
 	    { if (fprintf(ofp, "@@ Continuing to next round.\n\n")           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
-	  esl_sqfile_Position(dbfp, 0);
+	  /* Each jackhmmer iteration must rescan the complete target database.
+	   * Rewind the binary cursor as well as the original FASTA cursor. */
+	  if (msa_bin8_reader.data != NULL) msa_bin8_rewind();
+	  else esl_sqfile_Position(dbfp, 0);
 	} /* end iteration loop */
 
       /* Because we destroy/create the hitlist, om, pipeline, and msa above, rather than create/destroy,
@@ -740,7 +755,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_trace_Destroy(qtr);
       esl_sq_Reuse(qsq);
       esl_keyhash_Reuse(kh);
-      esl_sqfile_Position(dbfp, 0);
+      if (msa_bin8_reader.data != NULL) msa_bin8_rewind();
+      else esl_sqfile_Position(dbfp, 0);
     }
   if      (qstatus == eslEFORMAT) p7_Fail("Parse failed (sequence file %s):\n%s\n",
 					    qfp->filename, esl_sqfile_GetErrorBuf(qfp));
@@ -774,6 +790,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_keyhash_Destroy(kh);
   esl_sqfile_Close(qfp);
   esl_sqfile_Close(dbfp);
+  msa_bin8_close();
   esl_sq_Destroy(qsq);  
   esl_stopwatch_Destroy(w);
   p7_builder_Destroy(bld);
@@ -1606,7 +1623,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
   /* Main loop: */
-  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+  while ((sstatus = (msa_bin8_reader.data != NULL ? msa_bin8_read(dbsq) : esl_sqio_Read(dbfp, dbsq))) == eslOK)
     {
       p7_pli_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
@@ -1643,7 +1660,9 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   while (sstatus == eslOK)
     {
       block = (ESL_SQ_BLOCK *) newBlock;
-      sstatus = esl_sqio_ReadBlock(dbfp, block, -1, -1, /*max_init_window=*/FALSE, FALSE);
+      sstatus = (msa_bin8_reader.data != NULL
+                 ? msa_bin8_readblock(block)
+                 : esl_sqio_ReadBlock(dbfp, block, -1, -1, /*max_init_window=*/FALSE, FALSE));
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
