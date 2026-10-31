@@ -91,3 +91,23 @@ cat ~/WORK/dot/experiments/supermsa/dp/DP-02/V02-bin8/r01-q100/report.txt
 ```
 
 结论写回 `EXPERIMENTS.md` 和该方案的 `docs/variants/` 说明。
+
+### 向榜单提交
+
+提交的是正式入口 `job_baseline.slurm` 生成的日志 `stdout.<作业号>`（测评工具的日志格式不同，不能提交）。
+
+```bash
+# 登录节点：用已编译的 main 跑一遍正式入口（只设置 DATA/OUT，其他全部用默认值）
+SHA=<main 的 sha12>
+RUN=~/WORK/dot/experiments/supermsa/ev/EV-00/V00-main/rNN-official
+mkdir -p $RUN && cd $RUN && echo "commit=$SHA" > COMMIT
+DATA=~/WORK/dot/preliminary OUT=$RUN/results sbatch ~/WORK/dot/experiments/supermsa/builds/$SHA/job_baseline.slurm
+
+# 跑完后检查：并发数 6、incorrect = 0 / 100
+grep -E 'prologue time|并发数|search time|mean ROC10|incorrect' stdout.*
+
+# 在 ~/WORK/dot 下提交（凭据文件在这里），题目名是 SUPERMSA
+cd ~/WORK/dot
+./submit.sh --dry SUPERMSA <日志路径>    # 只校验，不计成绩
+./submit.sh SUPERMSA <日志路径>          # 正式计分
+```
