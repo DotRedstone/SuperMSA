@@ -1,4 +1,5 @@
 #!/bin/bash
-# DP-02/V02-bin8：转换器由 make 编译；这里在玩具库上验证 raw 与 bin8 输出一致。
+# main（v2）：bin8 冒烟测试；DP-01/V04：4K 与 64K 读取块逐字节一致。
 set -euo pipefail
 bash tests/test_bin8_smoke.sh
+bash tests/test_fasta_read_chunk.sh
