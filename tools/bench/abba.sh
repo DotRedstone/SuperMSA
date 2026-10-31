@@ -54,9 +54,13 @@ for ((i = 0; i < ${#ORDER}; i++)); do
     prep=$(awk '/^prologue time  = / {print $4}' "$out/prologue.log")
     [[ $prep =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "trial $trial 无法解析 prologue time"
 
+    # 资源参数为空时不传，让 run_queries.sh 使用自己的默认值（--official 模式，与正式入口一致）。
+    knobs=()
+    [ -z "$CPU" ] || knobs+=(CPU="$CPU")
+    [ -z "$PARALLEL" ] || knobs+=(PARALLEL="$PARALLEL")
+    [ -z "$WARMUP" ] || knobs+=(WARMUP="$WARMUP")
     # shellcheck disable=SC2086
-    env $envs DATA="$RUN/data" OUT="$out" JACKHMMER="$src/src/jackhmmer" \
-        CPU="$CPU" PARALLEL="$PARALLEL" WARMUP="$WARMUP" FORCE=1 \
+    env $envs DATA="$RUN/data" OUT="$out" JACKHMMER="$src/src/jackhmmer" "${knobs[@]}" FORCE=1 \
         bash "$src/run_queries.sh" "$RUN/data" "$out" > "$out/search.log" 2>&1 \
         || { tail -n 30 "$out/search.log" >&2; die "trial $trial search 失败"; }
     read -r search ran skipped < <(awk -F '\t' 'NR==2 {print $1, $2, $3}' "$out/wall_time.tsv")

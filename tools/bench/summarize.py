@@ -34,6 +34,11 @@ def main():
     for r in rows:
         for k in ("prologue_s", "search_s", "total_s"):
             r[k] = float(r[k])
+        # 各查询耗时之和：不受"最慢一条决定墙钟"的拖尾影响，查询数少时比墙钟更能反映方案效果。
+        timing = run / "trials" / ("%s-%s" % (r["trial"], r["arm"])) / "timing.tsv"
+        if timing.is_file():
+            with timing.open(encoding="utf-8") as fh:
+                r["query_sum_s"] = round(sum(float(t["seconds"]) for t in csv.DictReader(fh, delimiter="\t")), 1)
 
     order = env.get("ORDER", "")
     complete = len(rows) == len(order)
@@ -42,7 +47,8 @@ def main():
     for a, rs in arms.items():
         if rs:
             stats[a] = {k: round(mean([r[k] for r in rs]), 1)
-                        for k in ("prologue_s", "search_s", "total_s")}
+                        for k in ("prologue_s", "search_s", "total_s", "query_sum_s")
+                        if all(k in r for r in rs)}
 
     pairs = []
     for start in range(0, len(order) - 3, 4):
@@ -59,8 +65,9 @@ def main():
     for a in "AB":
         if a in stats:
             s = stats[a]
-            lines.append("%s mean   prologue=%7.1f  search=%7.1f  total=%7.1f  (n=%d)"
-                         % (a, s["prologue_s"], s["search_s"], s["total_s"], len(arms[a])))
+            lines.append("%s mean   prologue=%7.1f  search=%7.1f  total=%7.1f  query_sum=%8.1f  (n=%d)"
+                         % (a, s["prologue_s"], s["search_s"], s["total_s"],
+                            s.get("query_sum_s", float("nan")), len(arms[a])))
 
     verdict = "incomplete" if not complete else "single-arm"
     saved = pct = None
@@ -76,6 +83,10 @@ def main():
             verdict = "inconclusive"
         base_totals = [r["total_s"] for r in arms["A"]]
         lines.append("drift    base last-first = %.1f s" % (base_totals[-1] - base_totals[0]))
+        if "query_sum_s" in stats["A"] and "query_sum_s" in stats["B"]:
+            qa, qb = stats["A"]["query_sum_s"], stats["B"]["query_sum_s"]
+            lines.append("query_sum %.1f -> %.1f s (%.2f%%)  不受拖尾影响，仅作参考；判定仍以总时间为准"
+                         % (qa, qb, 100.0 * (qa - qb) / qa))
     lines.append("VERDICT=%s" % verdict)
     print("\n".join(lines))
 
