@@ -5,7 +5,7 @@
 # 输出:
 #   tbl/<sid>.tbl   命中表（评分输入）     msa/<sid>.sto  多序列比对
 #   timing.tsv      逐条耗时（仅供参考）   wall_time.tsv  正式计时：预热结束 → 最后一条跑完
-# 环境变量: JACKHMMER CPU(8) PARALLEL(1) ITERS(3) EVALUE(0.001) FILTERS WARMUP(5) FORCE(0，设 1 重跑已有结果)
+# 环境变量: JACKHMMER CPU(8) PARALLEL(6) ITERS(3) EVALUE(0.001) FILTERS WARMUP(5) FORCE(0，设 1 重跑已有结果)
 # 预热: 先对第一条 query 跑 WARMUP 次，把数据库读进 page cache，结果丢弃、不计时。
 # 评分: data_dir 下有 baseline_roc10.tsv 时，逐条判定 ROC10 是否不低于基线的 90%。
 set -euo pipefail
@@ -25,7 +25,7 @@ ITERS=${ITERS:-3}
 EVALUE=${EVALUE:-0.001}
 FILTERS=${FILTERS:---noali --F1 0.0005 --F2 5e-05 --F3 5e-07}
 WARMUP=${WARMUP:-5}
-PARALLEL=${PARALLEL:-1}  # concurrent queries (default 1 for baseline compatibility)
+PARALLEL=${PARALLEL:-6}  # QS-01/V03：默认同时跑 6 条查询 × 每条 8 线程；正式入口不设环境变量，所以默认值就是比赛配置
 FORCE=${FORCE:-0}
 DB=$DATA/database.fasta
 # The binary file is produced in this run's timed prologue, not before.
