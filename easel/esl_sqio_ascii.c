@@ -269,8 +269,9 @@ esl_sqascii_Open(char *filename, int format, ESL_SQFILE *sqfp)
    * Do not change stdin/gzip behavior, other formats, or default reads.
    * The option is sampled when the file is opened. */
   if (format == eslSQFILE_FASTA && !ascii->do_gzip && !ascii->do_stdin && !ascii->do_buffer) {
+    /* Accepted in v3: on by default; MSA_FASTA_CHUNK_64K=0 restores 4 KiB reads. */
     const char *opt = getenv("MSA_FASTA_CHUNK_64K");
-    if (opt && strcmp(opt, "1") == 0) ascii->fasta_read_chunk = 64 * 1024;
+    if (!(opt && strcmp(opt, "0") == 0)) ascii->fasta_read_chunk = 64 * 1024;
   }
 
   /* Configure the <sqfp>'s parser and inmaps for this format. */
