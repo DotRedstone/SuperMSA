@@ -5,6 +5,7 @@
 #       --tuned-env 'MSA_DP_BIN8=1' --queries q100 [--base main] [--base-env ''] \
 #       [--order ABBA] [--cpu 8] [--parallel 6] [--warmup 1] [--time 06:00:00] [--dry-run]
 #       [--reference-tbl DIR]   每个 trial 的命中表还要与 DIR 中的表等价（例如历史基线）
+#       [--official]            不传 CPU/PARALLEL/WARMUP，完全使用 run_queries.sh 的默认值（与正式入口一致；提交前必跑）
 #
 # 单臂运行（例如验证基线）：--order A，此时只用 --base。
 # 两臂默认用同一个 build（--base 默认等于 --tuned），只靠环境变量切换，变量最少。
@@ -39,6 +40,7 @@ while [ $# -gt 0 ]; do
         --time) time_limit=$2; shift 2;;
         --reference-tbl) reference=$2; shift 2;;
         --dry-run) dry=1; shift;;
+        --official) cpu= parallel= warmup=; shift;;
         *) die "unknown option $1";;
     esac
 done

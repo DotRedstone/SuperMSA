@@ -79,6 +79,16 @@ python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['verdict']
 # 运行目录只写一次
 MSA_ALLOW_NO_SLURM=1 bash "$run/abba.sh" "$run" > /dev/null 2>&1 && fail "rerun into existing run dir accepted"
 
+# --official：CPU/PARALLEL/WARMUP 为空时不传，run_queries.sh 用自己的默认值
+run3=$tmp/run3
+mkdir -p "$run3"
+cp "$run"/{abba.sh,compare_hit_tables.py,summarize.py,queries.txt} "$run3/"
+grep -v '^\(JOB_ID\|NODE\|STARTED_AT\|FINISHED_AT\|ORDER\|CPU\|PARALLEL\|WARMUP\)=' "$run/run.env" > "$run3/run.env"
+printf "ORDER=A\nCPU=''\nPARALLEL=''\nWARMUP=''\n" >> "$run3/run.env"
+MSA_ALLOW_NO_SLURM=1 bash "$run3/abba.sh" "$run3" > "$tmp/abba3.log" 2>&1 || { cat "$tmp/abba3.log"; fail "official mode"; }
+grep -q '并发数 6' "$run3/trials/01-A/search.log" || fail "official mode did not use run_queries default PARALLEL=6"
+grep -q '^VERDICT=single-arm$' "$run3/report.txt" || fail "official verdict"
+
 # 二进制被改动时必须拒绝
 run2=$tmp/run2
 mkdir -p "$run2"
