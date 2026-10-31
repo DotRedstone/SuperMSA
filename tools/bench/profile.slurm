@@ -35,8 +35,10 @@ for s in $SIDS; do
         --tblout "out/$s.tbl" "data/query/$s.fasta" "data/database.fasta" > "$s.jackhmmer.log" 2>&1
     secs=$(awk -v a="$t0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')
     echo "== $s: ${secs}s (含 perf 开销), hits=$(grep -vc '^#' "out/$s.tbl" || true)"
-    perf report -q --stdio --no-children -g none -i "$s.perf.data" --sort symbol 2>/dev/null | grep -v '^$' | head -40 > "$s.top.txt"
-    perf report -q --stdio --no-children -g none -i "$s.perf.data" --sort dso 2>/dev/null | grep -v '^$' | head -10 > "$s.dso.txt"
-    head -25 "$s.top.txt"
+    # 先写完整报告再截取；直接 "| head" 会让上游收到 SIGPIPE，在 pipefail 下中止整个作业。
+    perf report -q --stdio --no-children -g none -i "$s.perf.data" --sort symbol > "$s.symbols.txt" 2>/dev/null || true
+    perf report -q --stdio --no-children -g none -i "$s.perf.data" --sort dso > "$s.dso.txt" 2>/dev/null || true
+    grep -v '^$' "$s.symbols.txt" | sed -n 1,40p > "$s.top.txt" || true
+    sed -n 1,25p "$s.top.txt"
 done
 echo "PROFILE_COMPLETED=YES"
