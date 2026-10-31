@@ -8,7 +8,7 @@
 |---|---|---|---|
 | v1 | QS-01/V03 | 3576.1 s | EV-00/V00-main r01-q100，job 16208885 |
 | v2 | v1 + DP-02/V02 | 约 1600 s（−53.8%） | DP-02/V02-bin8 r01-q100，job 16208886 |
-| v2.1 | v2 + `PARALLEL` 默认改为 6 | 待 `--official` 复验 | v1/v2 的数字都是测评工具显式传 `PARALLEL=6` 测出来的；v2.1 之前的正式入口实际是串行 |
+| **v2.1** | v2 + `PARALLEL` 默认改为 6 | **1675.4 s**（prologue 79.8 + search 1595.6） | 正式入口 `job_baseline.slurm` 不加任何参数，job 16217895，0/100 incorrect，mean ROC10 0.7231；已提交榜单。v2.1 之前的正式入口实际是串行 |
 
 **教训**：q12 只有 12 条查询，6 个槽位只能跑两轮，墙钟由最慢的 Q969Q1_1（约 350 s，几乎纯计算，bin8 只快了 6 s）决定，
 所以 q12 的墙钟会严重低估大多数查询上的收益（bin8：q12 search −14%，q100 −56%）。
@@ -62,7 +62,7 @@ DP 类方案一律直接用 q100；报告里的 `query_sum`（各查询耗时之
 | 方案 | 内容 | 引用 | 状态 | 证据 |
 |---|---|---|---|---|
 | **EV-00** | **基线** | | | |
-| V00-main | 每个 vN 的 q100 复验 | main | accepted | v1：r01-q100，3576.1 s，100/100，与历史 QS-01 等价 |
+| V00-main | 每个 vN 的 q100 复验 | main | accepted | v1：r01-q100，3576.1 s，100/100，与历史 QS-01 等价；v2.1：r02-official（正式入口），1675.4 s，0/100 incorrect |
 | V01-serial-baseline | 原版串行 jackhmmer | `2f85a28` | accepted | job 16155687，q100 |
 | V02-msa-probe | 早期探针 | 集群 legacy | accepted | job 16158363 |
 | **EV-01** | **CPU 热点** | | | |
