@@ -55,7 +55,10 @@ DP 类方案一律直接用 q100；报告里的 `query_sum`（各查询耗时之
 | **QS-01** | **查询级并行** | | | | |
 | V01-parallel-scan | 扫描进程数 × 线程数组合 | 集群 legacy | | accepted | 选出 6×8 |
 | V02-candidate-repeat | 候选组合重复测量 | 集群 legacy | | accepted | |
-| V03-p6t8 | 6 进程 × 8 线程，xargs 动态调度 | main | | accepted | 旧 q100 完整运行一次；待 v1 复验 |
+| V03-p6t8 | 6 进程 × 8 线程，xargs 动态调度 | main | | accepted | v1 复验 3576.1 s |
+| V04-p7t8 | 7 进程 × 8 线程，用满 56 核（6×8 是在 bin8 之前、读取仍是瓶颈时选的） | main，只用环境变量 `PARALLEL=7` | | proposed | |
+| **QS-02** | **查询启动顺序** | | | | |
+| V01-longest-first | 按查询长度从长到短启动 | `feat/qs-02/v01-longest-first` | | proposed | 模拟：1524 → 1491 s |
 
 ## SA — 搜索算法
 

@@ -92,8 +92,18 @@ done
 # returns non-zero when any child fails (pipefail propagates that failure).
 t_all=$(date +%s.%N)
 if [ "$ran" -gt 0 ]; then
+    # QS-02/V01（MSA_QS_LONGEST_FIRST=1）：按查询序列的残基数从长到短启动，减少最后的拖尾。
+    # 只使用查询序列本身，不读取数据库；排序在计时区内完成。结果文件与启动顺序无关。
+    launch=("${to_run[@]}")
+    if [ "${MSA_QS_LONGEST_FIRST:-0}" = 1 ]; then
+        launch=()   # 集群上是 bash 4.2，没有 mapfile -d
+        while IFS= read -r qf; do launch+=("$qf"); done < <(
+            for qf in "${to_run[@]}"; do
+                printf '%s\t%s\n' "$(grep -v '^>' "$qf" | tr -d ' \t\r\n' | wc -c)" "$qf"
+            done | sort -t $'\t' -k1,1nr -s | cut -f2-)
+    fi
     export JACKHMMER CPU ITERS EVALUE FILTERS OUT DB
-    printf '%s\0' "${to_run[@]}" |
+    printf '%s\0' "${launch[@]}" |
         xargs -0 -r -P "$PARALLEL" -n 1 bash "$REPO/scripts/query_worker.sh"
 
     for qf in "${to_run[@]}"; do
