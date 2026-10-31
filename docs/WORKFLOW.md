@@ -94,6 +94,9 @@ cat ~/WORK/dot/experiments/supermsa/dp/DP-02/V02-bin8/r01-q100/report.txt
 
 结论写回 `EXPERIMENTS.md` 和该方案的 `docs/variants/` 说明。
 
+profile：`tools/bench/profile.sh --task EV-01 --variant V02-v3-hotspot --ref main --sids 'Q969Q1_1 P20429_1'`。
+作业先用该 build 的 prologue 生成 bin8 库，再对每条查询单独 `perf record`，热点列表写在运行目录的 `<sid>.top.txt` 里。
+
 ### 向榜单提交
 
 提交的是正式入口 `job_baseline.slurm` 生成的日志 `stdout.<作业号>`（测评工具的日志格式不同，不能提交）。

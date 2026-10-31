@@ -71,5 +71,6 @@ DP 类方案一律直接用 q100；报告里的 `query_sum`（各查询耗时之
 | V02-msa-probe | 早期探针 | 集群 legacy | accepted | job 16158363 |
 | **EV-01** | **CPU 热点** | | | |
 | V01-hotspot | 单查询 perf profile（P59819_1） | `archive/ev-01/v01-hotspot` | accepted | addbuf 24.8%、seebuf 15.0%、header_fasta 11.1%（cycles:u） |
+| V02-v3-hotspot | v3（bin8 + 64K）上的单查询 profile：最慢、次慢、中位数、最快各一条 | main | proposed | Q969Q1_1、P41772_1、P20429_1、P75884_1 |
 | **EV-02** | **Reader/Worker 停顿诊断** | | | |
 | V01-reader-worker | 可选的分轮计时 | `archive/ev-02/v01-reader-worker` | parked | 需要时再基于 main 重建 |
