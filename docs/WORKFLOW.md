@@ -36,6 +36,7 @@
 
 - 代码改动 + 测试 + 一页说明 `docs/variants/<TASK>-<VNN>-<slug>.md`，包括：假设、改动、开关、正确性依据、运行结果、结论。
 - 新行为一律用开关控制，**默认关闭**：环境变量 `MSA_<NAME>=1`。这样同一个 build 就能跑 ABBA 的两个臂。
+  开关只在打开文件或创建对象时读取一次，**不要在每条记录的热路径里调用 `getenv`**，否则开关本身的开销会混进测量结果。
 - 如果需要额外编译工具（例如预处理转换器），写在 `tools/bench/build_hook.sh` 里，`build.sh` 会自动执行它。
 - **不放**专用的 sweep 脚本、Slurm 作业、runbook、手抄的日志。测评一律用 `tools/bench/`。
 
@@ -52,7 +53,7 @@
 ```
 ~/WORK/dot/
   preliminary/                         比赛数据，只读
-  SuperMSA/                            仓库，只通过 git push 更新，不在这里改代码，也不在这里编译
+  SuperMSA/                            仓库，只通过本地的 tools/bench/sync_hpc.sh 更新，不在这里改代码，也不在这里编译
   experiments/supermsa/
     builds/<sha12>/                    按 commit 编译的产物，只读；BINARIES.sha256 存在即表示编译完整
     <dp|ck|qs|sa|ev>/<TASK>/<VARIANT>/<RUN>/
@@ -64,14 +65,19 @@
 
 ### 一次实验的完整流程
 
+集群访问 GitHub 不稳定，所以由本地通过 ssh 推送：`tools/bench/sync_hpc.sh` 会把 **GitHub 上的状态**（`origin/*` 和 tag）
+推到集群仓库，并把集群上的 main 快进。集群上永远不改代码。集群的 git 是 1.8.3；
+`build.sh` 和 `new_run.sh` 收到分支名时，会自动解析成 `origin/<分支名>`。
+
 ```bash
-# 本地：推送代码（集群上的仓库设置了 receive.denyCurrentBranch=updateInstead）
-git push hpc main perf/dp-02/v02-bin8
+# 本地
+git push origin main perf/dp-02/v02-bin8
+tools/bench/sync_hpc.sh
 
 # test01：编译（同一个 commit 只编译一次）
 ssh test01
 module load compilers/gcc/v12.2.0
-~/WORK/dot/SuperMSA/tools/bench/build.sh perf/dp-02/v02-bin8
+~/WORK/dot/SuperMSA/tools/bench/build.sh main perf/dp-02/v02-bin8
 exit
 
 # 登录节点：建运行目录并提交作业（先加 --dry-run 看一眼）
