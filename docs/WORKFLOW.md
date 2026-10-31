@@ -23,7 +23,7 @@
 | 主线 | `main`：当前最优、已验证、随时可以提交比赛 | |
 | 方案分支 | `<feat\|perf\|fix\|probe>/<task>/<variant>`，全部小写 | `perf/dp-02/v02-bin8` |
 | 杂务分支 | `<docs\|refactor\|chore\|fix\|test>/<slug>` | `refactor/bench-harness` |
-| 发布 | tag `vN`：main 每接受一个方案，就递增一次 | `v1` |
+| 发布 | tag `vN`：main 每接受一个方案，就递增一次；只修正默认值或测评工具时用 `vN.M` | `v1`、`v2.1` |
 | 归档 | tag `archive/<task>/<variant>` | `archive/dp-02/v01-rewrap` |
 
 - 方案分支**从 main 开**。如果确实依赖另一个未合并的方案，就从那个方案的分支开，并在登记表的"依赖"列写明。依赖的方案被拒绝时，本方案也要重新评估。
@@ -47,6 +47,8 @@
 2. **对照**：同一个独占节点，ABBA 顺序，同一个 build，只用开关切换。总时间 = prologue + search。
 3. **接受**必须用 `q100`。`q12` 的墙钟由最慢的一条查询（Q969Q1_1）决定，只适合做快速冒烟和粗筛；**DP 类方案直接用 q100**（bin8 在 q12 上 −14%，在 q100 上 −56%）。
 4. **判定**：两组配对差值同号才能判 faster / slower，否则判 inconclusive。
+5. **发布与提交**：每个 `vN` 发布、每次向组委会提交之前，都要用 `new_run.sh --task EV-00 --variant V00-main --base main --order A --queries q100 --official` 复验一次。
+   `--official` 不传任何资源参数，走的是正式入口的默认值。测评工具平时显式传的参数，可能会掩盖默认值配错的问题（v2 之前 `PARALLEL` 的默认值一直是 1）。
 
 ## 5. 集群
 
