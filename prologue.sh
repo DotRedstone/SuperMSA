@@ -24,8 +24,29 @@ export REPO DATA OUT
 elapsed() { awk -v a="$1" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}'; }
 
 prepare() {
-    # 在此填写预处理步骤:
-    :
+    # Optional 8-bit digital DB. Output is constructed only inside the
+    # measured prologue and is never reused across benchmark runs.
+    if [ "${MSA_BIN8:-1}" = 1 ]; then
+        local converter="$REPO/scripts/fasta_to_bin8"
+        local prepared="$OUT/prepared/database.bin8"
+        local tmp
+
+        [ -x "$converter" ] || { echo "ERROR: missing converter $converter" >&2; return 1; }
+        [ -s "$DATA/database.fasta" ] || { echo "ERROR: missing input database" >&2; return 1; }
+        mkdir -p "$OUT/prepared"
+        [ ! -e "$prepared" ] || { echo "ERROR: prepared database exists; use fresh OUT" >&2; return 1; }
+        tmp=$(mktemp "$OUT/prepared/.database.bin8.XXXXXX") || return 1
+        if ! "$converter" "$DATA/database.fasta" "$tmp"; then
+            rm -f -- "$tmp"
+            return 1
+        fi
+        if ! mv -- "$tmp" "$prepared"; then
+            rm -f -- "$tmp"
+            return 1
+        fi
+        stat -c 'BIN8_FILE_BYTES=%s' "$prepared"
+        echo "BIN8_PREPARED=$prepared"
+    fi
 }
 
 echo "预处理开始..."

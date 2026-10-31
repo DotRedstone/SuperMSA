@@ -53,3 +53,4 @@ results/
 stdout.*
 stderr.*
 __pycache__/
+scripts/fasta_to_bin8
