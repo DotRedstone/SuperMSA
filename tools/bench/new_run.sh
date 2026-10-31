@@ -4,6 +4,7 @@
 #   tools/bench/new_run.sh --task DP-02 --variant V02-bin8 --tuned perf/dp-02/v02-bin8 \
 #       --tuned-env 'MSA_DP_BIN8=1' --queries q100 [--base main] [--base-env ''] \
 #       [--order ABBA] [--cpu 8] [--parallel 6] [--warmup 1] [--time 06:00:00] [--dry-run]
+#       [--reference-tbl DIR]   每个 trial 的命中表还要与 DIR 中的表等价（例如历史基线）
 #
 # 单臂运行（例如验证基线）：--order A，此时只用 --base。
 # 两臂默认用同一个 build（--base 默认等于 --tuned），只靠环境变量切换，变量最少。
@@ -14,9 +15,14 @@ WS=${MSA_WS:-$HOME/WORK/dot}
 REPO=${MSA_REPO:-$WS/SuperMSA}
 EXP=$WS/experiments/supermsa
 die() { echo "ERROR: $*" >&2; exit 1; }
+# 集群上的 git 是 1.8.3，不支持 git -C；分支名找不到时自动尝试 origin/<分支名>。
+g() { (cd "$REPO" && git "$@"); }
+resolve_sha() {
+    g rev-parse -q --verify "$1^{commit}" 2>/dev/null || g rev-parse -q --verify "origin/$1^{commit}" 2>/dev/null
+}
 
 task= variant= base= tuned= base_env= tuned_env= queries=q12 order=ABBA
-cpu=8 parallel=6 warmup=1 time_limit= dry=0
+cpu=8 parallel=6 warmup=1 time_limit= dry=0 reference=
 while [ $# -gt 0 ]; do
     case $1 in
         --task) task=$2; shift 2;;
@@ -31,6 +37,7 @@ while [ $# -gt 0 ]; do
         --parallel) parallel=$2; shift 2;;
         --warmup) warmup=$2; shift 2;;
         --time) time_limit=$2; shift 2;;
+        --reference-tbl) reference=$2; shift 2;;
         --dry-run) dry=1; shift;;
         *) die "unknown option $1";;
     esac
@@ -50,12 +57,13 @@ qfile=$REPO/tools/bench/querysets/$queries.txt
 builds=$EXP/builds
 resolve() {
     local sha
-    sha=$(git -C "$REPO" rev-parse --verify "$1^{commit}") || die "无法解析 $1"
+    sha=$(resolve_sha "$1") || die "无法解析 $1（先在本地 push 并执行 tools/bench/sync_hpc.sh）"
     [ -f "$builds/${sha:0:12}/BINARIES.sha256" ] || die "$1 (${sha:0:12}) 尚未编译：在 test01 上执行 tools/bench/build.sh $1"
     echo "$sha"
 }
 base_sha=$(resolve "$base")
 tuned_sha=$(resolve "$tuned")
+[ -z "$reference" ] || [ -d "$reference" ] || die "--reference-tbl 不是目录：$reference"
 nq=$(grep -cvE '^\s*(#|$)' "$qfile")
 
 # 默认时限：每条查询每个 trial 按 1 分钟估算，再加 30 分钟余量。
@@ -67,14 +75,14 @@ n=1
 while compgen -G "$parent/r$(printf %02d $n)-*" > /dev/null; do n=$((n + 1)); done
 run=$parent/r$(printf %02d $n)-$queries
 
-harness_sha=$(git -C "$REPO" rev-parse HEAD)
+harness_sha=$(g rev-parse HEAD)
 echo "run=$run"
 echo "base=$base ${base_sha:0:12} env='$base_env'"
 echo "tuned=$tuned ${tuned_sha:0:12} env='$tuned_env'"
 echo "order=$order queries=$queries($nq) cpu=$cpu parallel=$parallel warmup=$warmup time=$time_limit"
 [ "$dry" = 0 ] || exit 0
 
-[ -z "$(git -C "$REPO" status --porcelain)" ] || die "$REPO 有未提交改动，集群上的仓库只能通过 push 更新"
+[ -z "$(g status --porcelain)" ] || die "$REPO 有未提交改动，集群上的仓库只能通过 push 更新"
 mkdir -p "$run"
 cp "$REPO/tools/bench/abba.sh" "$REPO/tools/bench/abba.slurm" \
    "$REPO/tools/bench/compare_hit_tables.py" "$REPO/tools/bench/summarize.py" "$run/"
@@ -84,6 +92,7 @@ grep -vE '^\s*(#|$)' "$qfile" > "$run/queries.txt"
     printf 'BASE_REF=%q\nBASE_SHA=%q\nBASE_ENV=%q\n' "$base" "$base_sha" "$base_env"
     printf 'TUNED_REF=%q\nTUNED_SHA=%q\nTUNED_ENV=%q\n' "$tuned" "$tuned_sha" "$tuned_env"
     printf 'ORDER=%q\nQUERIES=%q\nCPU=%q\nPARALLEL=%q\nWARMUP=%q\n' "$order" "$queries" "$cpu" "$parallel" "$warmup"
+    [ -z "$reference" ] || printf 'REFERENCE_TBL=%q\n' "$reference"
     printf 'BUILDS=%q\nDATA_SRC=%q\nHARNESS_SHA=%q\nCREATED_AT=%q\n' \
         "$builds" "${DATA:-$WS/preliminary}" "$harness_sha" "$(date -Is)"
 } > "$run/run.env"
