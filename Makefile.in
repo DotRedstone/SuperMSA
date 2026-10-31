@@ -88,6 +88,7 @@ endif
 all:
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} all
+	${QUIET_CC}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} -I${ESLDIR} -o scripts/fasta_to_bin8 scripts/fasta_to_bin8.c -L${ESLDIR} -leasel -pthread -lm
 
 # dev: compile all executables, including drivers.
 #
@@ -137,6 +138,7 @@ uninstall:
 # "make clean" removes almost everything except configuration files.
 #
 clean:
+	${QUIET}-rm -f scripts/fasta_to_bin8
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} clean
 	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out

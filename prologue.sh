@@ -26,7 +26,7 @@ elapsed() { awk -v a="$1" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}'; }
 prepare() {
     # Optional 8-bit digital DB. Output is constructed only inside the
     # measured prologue and is never reused across benchmark runs.
-    if [ "${MSA_BIN8:-0}" = 1 ]; then
+    if [ "${MSA_BIN8:-1}" = 1 ]; then
         local converter="$REPO/scripts/fasta_to_bin8"
         local prepared="$OUT/prepared/database.bin8"
         local tmp
