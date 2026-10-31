@@ -2,6 +2,8 @@
 # Lightweight scheduler regression test with a fake jackhmmer.
 # Run on test01 (NOT a login node): bash tests/test_query_scheduler.sh
 set -euo pipefail
+# 这里测的是调度/测评逻辑，关闭默认开启的 bin8 预处理（假 build 里没有转换器）。
+export MSA_BIN8=0
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/msa-scheduler-test.XXXXXXXX")

@@ -2,6 +2,8 @@
 # 用假的 jackhmmer 和 score.py 在本地跑通 abba.sh 和 summarize.py。
 # 不需要 Slurm，也不读取比赛数据。
 set -euo pipefail
+# 这里测的是调度/测评逻辑，关闭默认开启的 bin8 预处理（假 build 里没有转换器）。
+export MSA_BIN8=0
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/msa-bench-test.XXXXXXXX")

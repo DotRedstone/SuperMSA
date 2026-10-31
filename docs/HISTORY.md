@@ -16,10 +16,10 @@
 | `perf/dp-01/preprocess`（`perf/fasta-preprocess`） | `665f1e7` | DP-02/V01 | `archive/dp-02/v01-rewrap` |
 | `perf/dp-02/binary-sequence-db`（`perf/binary-sequence-db`） | `5c3b37d` | DP-02/V02 | `perf/dp-02/v02-bin8` |
 | `perf/dp-02/huffman`（`perf/db-huffman`） | `7942aca` | DP-02/V03 | `archive/dp-02/v03-huffman` |
-| `perf/dp-02/four-way`（`perf/db-four-way`） | `9dcea8b` | DP-02/V04 及 V00 对比 | `perf/dp-02/v04-dsqdata` |
+| `perf/dp-02/four-way`（`perf/db-four-way`） | `9dcea8b` | DP-02/V04 及 V00 对比 | `archive/dp-02/v04-dsqdata`（基于 main 重建后归档） |
 | `perf/dp-03/batched-io`（`perf/bin8-batched-io-t2`，T2/E02） | `85868e2` | DP-02/V05 | `archive/dp-02/v05-bin8-batched-writer` |
 | `perf/dp-04/reader-queue`（`perf/reader-queue-t3`，T3/E03） | `fa7aed6` | DP-03/V01 | `archive/dp-03/v01-queue-geometry` |
-| `perf/dp-05/signal-one`（`perf/queue-signal-one-t4`，T4/E04） | `a835585` | DP-03/V02 | `perf/dp-03/v02-signal-one` |
+| `perf/dp-05/signal-one`（`perf/queue-signal-one-t4`，T4/E04） | `a835585` | DP-03/V02 | `archive/dp-03/v02-signal-one`（基于 main 重建后归档） |
 | `perf/ck-01/ssv-band-limit`（`perf/ssv-band-limit`） | `6eef9eb` | CK-01/V01 | `archive/ck-01/v01-band-limit` |
 | `probe/ev-03/jackhmmer-hotspots`（`perf/jackhmmer-hotspots`） | `c0b7300` | EV-01/V01 | `archive/ev-01/v01-hotspot` |
 | `probe/ev-02/reader-worker`（`perf/reader-worker-profile-t5`，T5/P01） | `d74d874` | EV-02/V01 | `archive/ev-02/v01-reader-worker` |

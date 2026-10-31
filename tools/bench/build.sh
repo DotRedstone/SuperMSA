@@ -14,8 +14,14 @@ REPO=${MSA_REPO:-$WS/SuperMSA}
 BUILDS=$WS/experiments/supermsa/builds
 [ $# -ge 1 ] || { echo "usage: $0 <ref> [<ref> ...]" >&2; exit 2; }
 
+# 集群上的 git 是 1.8.3，不支持 git -C；分支名找不到时自动尝试 origin/<分支名>。
+g() { (cd "$REPO" && git "$@"); }
+resolve_sha() {
+    g rev-parse -q --verify "$1^{commit}" 2>/dev/null || g rev-parse -q --verify "origin/$1^{commit}" 2>/dev/null
+}
+
 for ref in "$@"; do
-    sha=$(git -C "$REPO" rev-parse --verify "$ref^{commit}")
+    sha=$(resolve_sha "$ref") || { echo "ERROR: 无法解析 $ref（先在本地 push 并执行 tools/bench/sync_hpc.sh）" >&2; exit 1; }
     dir=$BUILDS/${sha:0:12}
     if [ -f "$dir/BINARIES.sha256" ]; then
         echo "BUILD_OK $ref ${sha:0:12} (cached)"; continue
@@ -23,7 +29,7 @@ for ref in "$@"; do
     [ ! -e "$dir" ] || { echo "ERROR: $dir 是未完成的编译，删除后重试" >&2; exit 1; }
 
     mkdir -p "$dir"
-    git -C "$REPO" archive "$sha" | tar -x -C "$dir"
+    g archive "$sha" | tar -x -m -C "$dir"   # -m：不还原 commit 时间戳，避免时钟偏差干扰 make
     (
         cd "$dir"
         autoconf
